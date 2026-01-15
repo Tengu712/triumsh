@@ -19,3 +19,5 @@ a"z
 ECHO foo 'b
   ar b
 a'z
+
+ECHO a'Aあ'啊b

@@ -1,5 +1,7 @@
 #include "command.h"
 
+#include "utf8.h"
+
 #include <stdio.h>
 #include <string.h>
 
@@ -28,7 +30,7 @@ int builtin_echo(const uint8_t *const cmdline, size_t len) {
 			s = i;
 			continue;
 		}
-		i++;
+		i += get_utf8_char_length(cmdline[i]);
 	}
 
 	if (i > s) fwrite((void *)&cmdline[s], sizeof(uint8_t), i - s, stdout);
