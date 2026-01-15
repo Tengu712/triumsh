@@ -1,0 +1,9 @@
+# Test for built-in ECHO command
+#
+# Since `echo` is a built-in command in cmd.exe on Windows,
+# triumsh provides ECHO as a built-in command for cross-platform compatibility.
+
+ECHO Hello, world!
+
+ECHO foo b
+  ar baz

@@ -1,3 +1,4 @@
+#include "command.h"
 #include "exec.h"
 
 #include <limits.h>
@@ -90,11 +91,14 @@ int command_line(
 
 	if (!should_run) return 0;
 
+	size_t len = g_cmdline_cursor;
 	*state = TOP_LEVEL;
 	g_cmdline_buf[g_cmdline_cursor] = '\0';
 	g_cmdline_cursor = 0;
-	int result = execute_command((char *)g_cmdline_buf);
 
+	if (exec_builtin_command(g_cmdline_buf, len)) return 0;
+
+	int result = execute_command((char *)g_cmdline_buf);
 	if (result != 0) fprintf(stderr, "Command exited with code %d: %s", result, g_cmdline_buf);
 
 	return result;
