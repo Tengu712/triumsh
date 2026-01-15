@@ -18,10 +18,12 @@ int builtin_echo(const uint8_t *const cmdline, size_t len) {
 
 	size_t s = 5;
 	size_t i = 5;
+	uint8_t quote = '\0';
 
 	while (i < len) {
-		if (cmdline[i] == '\'') {
+		if ((cmdline[i] == '\'' || cmdline[i] == '"') && (quote == '\0' || quote == cmdline[i])) {
 			if (i > s) fwrite((void *)&cmdline[s], sizeof(uint8_t), i - s, stdout);
+			quote = cmdline[i];
 			i++;
 			s = i;
 			continue;

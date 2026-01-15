@@ -17,6 +17,8 @@ del temp.txt
 
 %TRISH% err-unclosed-single.trish > nul 2>&1
 if %ERRORLEVEL% equ 0 set ERROR=1 && echo [test] fail: err-unclosed-single.trish
+%TRISH% err-unclosed-double.trish > nul 2>&1
+if %ERRORLEVEL% equ 0 set ERROR=1 && echo [test] fail: err-unclosed-double.trish
 
 if %ERROR%==1 (
 	exit /b 1

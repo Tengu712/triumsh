@@ -12,6 +12,7 @@ enum State {
 	COMMENT,
 	COMMAND_LINE,
 	SINGLE_QUOTED,
+	DOUBLE_QUOTED,
 };
 
 // Returns file size in bytes, or LONG_MAX on failure.
@@ -158,10 +159,15 @@ int main(int argc, const char *const argv[]) {
 			if (state == COMMAND_LINE)       state = SINGLE_QUOTED;
 			else if (state == SINGLE_QUOTED) state = COMMAND_LINE;
 		}
+		if (data[cursor] == '"') {
+			if (state == COMMAND_LINE)       state = DOUBLE_QUOTED;
+			else if (state == DOUBLE_QUOTED) state = COMMAND_LINE;
+		}
 
 		switch (state) {
 		case COMMAND_LINE:
 		case SINGLE_QUOTED:
+		case DOUBLE_QUOTED:
 			if (command_line(data, file_size, cursor, char_len, &state) != 0) {
 				fprintf(stderr, ": %s (%u)\n", argv[1], line_number);
 				free((void *)data);
@@ -183,6 +189,11 @@ int main(int argc, const char *const argv[]) {
 
 	if (state == SINGLE_QUOTED) {
 		fprintf(stderr, "Unclosed single quote: %s\n", argv[1]);
+		free((void *)data);
+		return 1;
+	}
+	if (state == DOUBLE_QUOTED) {
+		fprintf(stderr, "Unclosed double quote: %s\n", argv[1]);
 		free((void *)data);
 		return 1;
 	}
