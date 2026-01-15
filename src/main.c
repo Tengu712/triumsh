@@ -11,6 +11,7 @@ enum State {
 	TOP_LEVEL = 0,
 	COMMENT,
 	COMMAND_LINE,
+	SINGLE_QUOTED,
 };
 
 // Returns file size in bytes, or LONG_MAX on failure.
@@ -80,10 +81,12 @@ int command_line(
 	static uint8_t g_cmdline_buf[2 * 1024 * 1024];
 	static size_t  g_cmdline_cursor = 0;
 
-	if (data[cursor] != '\n') {
+	if (*state == SINGLE_QUOTED || data[cursor] != '\n') {
 		memcpy(&g_cmdline_buf[g_cmdline_cursor], &data[cursor], char_len);
 		g_cmdline_cursor += char_len;
 	}
+
+	if (*state != COMMAND_LINE) return 0;
 
 	int should_run =
 		(long)(cursor + char_len) >= file_size
@@ -151,8 +154,14 @@ int main(int argc, const char *const argv[]) {
 			return 1;
 		}
 
+		if (data[cursor] == '\'') {
+			if (state == COMMAND_LINE)       state = SINGLE_QUOTED;
+			else if (state == SINGLE_QUOTED) state = COMMAND_LINE;
+		}
+
 		switch (state) {
 		case COMMAND_LINE:
+		case SINGLE_QUOTED:
 			if (command_line(data, file_size, cursor, char_len, &state) != 0) {
 				fprintf(stderr, ": %s (%u)\n", argv[1], line_number);
 				free((void *)data);
@@ -170,6 +179,12 @@ int main(int argc, const char *const argv[]) {
 
 		if (data[cursor] == '\n') line_number++;
 		cursor += char_len;
+	}
+
+	if (state == SINGLE_QUOTED) {
+		fprintf(stderr, "Unclosed single quote: %s\n", argv[1]);
+		free((void *)data);
+		return 1;
 	}
 
 	free((void *)data);

@@ -7,3 +7,9 @@ ECHO Hello, world!
 
 ECHO foo b
   ar baz
+
+ECHO
+
+ECHO foo 'b
+  ar b
+a'z

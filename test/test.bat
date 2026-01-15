@@ -15,6 +15,9 @@ fc temp.txt echo.txt > nul
 if %ERRORLEVEL% neq 0 set ERROR=1 && echo [test] fail: echo.trish
 del temp.txt
 
+%TRISH% err-unclosed-single.trish > nul 2>&1
+if %ERRORLEVEL% equ 0 set ERROR=1 && echo [test] fail: err-unclosed-single.trish
+
 if %ERROR%==1 (
 	exit /b 1
 ) else (

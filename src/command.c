@@ -6,10 +6,30 @@
 int builtin_echo(const uint8_t *const cmdline, size_t len) {
 	if (len < 4) return 0;
 	if (strncmp((char *)cmdline, "ECHO", 4) != 0) return 0;
-	if (len == 4) return 1;
+	if (len == 4) {
+		fwrite("\n", sizeof(char), 1, stdout);
+		return 1;
+	}
 	if (cmdline[4] != ' ' && cmdline[4] != '\t') return 0;
-	if (len == 5) return 1;
-	fwrite((void *)&cmdline[5], sizeof(uint8_t), len - 5, stdout);
+	if (len == 5) {
+		fwrite("\n", sizeof(char), 1, stdout);
+		return 1;
+	}
+
+	size_t s = 5;
+	size_t i = 5;
+
+	while (i < len) {
+		if (cmdline[i] == '\'') {
+			if (i > s) fwrite((void *)&cmdline[s], sizeof(uint8_t), i - s, stdout);
+			i++;
+			s = i;
+			continue;
+		}
+		i++;
+	}
+
+	if (i > s) fwrite((void *)&cmdline[s], sizeof(uint8_t), i - s, stdout);
 	fwrite("\n", sizeof(char), 1, stdout);
 	return 1;
 }
