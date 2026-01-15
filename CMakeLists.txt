@@ -11,3 +11,9 @@ if(WIN32)
 endif()
 
 add_executable(trish ${SOURCES})
+
+if(MSVC)
+	target_compile_options(trish PRIVATE /W4)
+else()
+	target_compile_options(trish PRIVATE -Wall -Wextra -Wpedantic)
+endif()

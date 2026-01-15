@@ -86,7 +86,7 @@ int command_line(
 	}
 
 	int should_run =
-		cursor + char_len >= file_size
+		(long)(cursor + char_len) >= file_size
 		|| data[cursor] == '\n' && data[cursor + 1] != ' ' && data[cursor + 1] != '\t';
 
 	if (!should_run) return 0;
@@ -137,7 +137,7 @@ int main(int argc, const char *const argv[]) {
 	unsigned int state      = TOP_LEVEL;
 	unsigned int prev_state = TOP_LEVEL;
 
-	while (cursor < file_size) {
+	while ((long)cursor < file_size) {
 		const unsigned int char_len = get_utf8_char_length(data[cursor]);
 		if (!char_len) {
 			fprintf(stderr, "Invalid character found: %s (%u)\n", argv[1], line_number);
