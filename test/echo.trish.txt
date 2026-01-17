@@ -1,0 +1,15 @@
+Hello, world!
+Hello, world!
+Hello, world!
+Hello, world!
+Hello, world!
+Hello, world!
+Hello, world!
+
+foo b
+  ar 'b
+az
+foo b
+  ar "b
+az
+aAあ啊b

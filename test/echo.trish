@@ -4,20 +4,22 @@
 # triumsh provides ECHO as a built-in command for cross-platform compatibility.
 
 ECHO Hello, world!
+ECHO Hello,      world!
+ECHO Hello,
+     world!
+
 ECHO 'Hello, world!'
 ECHO "Hello, world!"
+EC'H'O Hello, world!
+EC"HO" Hello, world!
 
 ECHO
-
-ECHO foo b
-  ar baz
 
 ECHO foo "b
   ar 'b
 a"z
-
 ECHO foo 'b
-  ar b
+  ar "b
 a'z
 
 ECHO a'Aあ'啊b

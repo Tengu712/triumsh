@@ -2,12 +2,15 @@ CMAKE_MINIMUM_REQUIRED(VERSION 4.0.0)
 project(triumsh C)
 
 set(SOURCES
+	src/cmdline.c
+	src/exec.c
 	src/main.c
-	src/command.c
 )
 
 if(WIN32)
 	list(APPEND SOURCES src/exec_windows.c)
+else()
+	list(APPEND SOURCES src/exec_posix.c)
 endif()
 
 add_executable(trish ${SOURCES})

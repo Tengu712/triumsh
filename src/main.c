@@ -1,6 +1,5 @@
-#include "command.h"
-#include "exec.h"
-#include "utf8.h"
+#include "cmdline.h"
+#include "context.h"
 
 #include <limits.h>
 #include <stdint.h>
@@ -8,96 +7,60 @@
 #include <stdlib.h>
 #include <string.h>
 
-enum State {
-	TOP_LEVEL = 0,
-	COMMENT,
-	COMMAND_LINE,
-	SINGLE_QUOTED,
-	DOUBLE_QUOTED,
-};
+#if CHAR_BIT != 8
+#error "This application requires CHAR_BIT == 8"
+#endif
 
 // Returns file size in bytes, or LONG_MAX on failure.
-long get_file_size(FILE *fp) {
+size_t get_file_size(FILE *fp) {
 	if (fseek(fp, 0, SEEK_END)) return LONG_MAX;
 	const long file_size = ftell(fp);
 	if (fseek(fp, 0, SEEK_SET)) return LONG_MAX;
-	return file_size;
+	return (size_t)file_size;
 }
 
 // Allocates and reads file contents with null termination.
 // Returns NULL on failure.
-uint8_t *read_file(FILE *fp, long file_size) {
+uint8_t *read_file(FILE *fp, size_t file_size) {
 	uint8_t *const data = (uint8_t *)malloc(file_size + 1);
 	if (!data) return NULL;
-	size_t readed_size = fread((void *)data, 1, file_size, fp);
+	const size_t readed_size = fread((void *)data, 1, file_size, fp);
 	if (readed_size < file_size) return NULL;
 	data[readed_size] = '\0';
 	return data;
 }
 
-// Transitions state based on the first byte of a character.
-// Returns 0 if an error is detected.
-int top_level(uint8_t c, unsigned int *state, unsigned int *prev_state) {
-	switch (c) {
-	// Skip whiteline at top level.
-	case '\n':
-		break;
+typedef enum TopLevelItem_t {
+	TLI_END_OF_FILE = 0,
+	TLI_COMMAND_LINE,
+} TopLevelItem;
 
-	// Disallow whitespace at top level.
-	case '\t':
-	case ' ':
-		fprintf(stderr, "Whitespace not allowed at top level");
-		return 0;
+TopLevelItem find_next_top_level_item(Context *ctx) {
+	while (is_continue(ctx)) {
+		switch (ctx->data[ctx->cursor]) {
+		// Skip a whiteline.
+		case '\n':
+			advance_cursor(ctx);
+			break;
 
-	// Enter a comment.
-	case '#':
-		*prev_state = *state;
-		*state      = COMMENT;
-		break;
+		// Skip a comment line.
+		case '#':
+			skip_to_next_newline(ctx);
+			break;
 
-	// Otherwise, start command line.
-	default:
-		*state = COMMAND_LINE;
-		break;
+		// Disallow whitespace at top level.
+		case ' ':
+		case '\t':
+			fprintf(stderr, "Whitespace not allowed at top level: %s (%zu)\n", ctx->file_name, ctx->line_number);
+			exit(1);
+			break;
+
+		// Command line found.
+		default:
+			return TLI_COMMAND_LINE;
+		}
 	}
-	return 1;
-}
-
-// Constructs and executes a command line.
-// Transitions to TOP_LEVEL state when executed.
-// Returns 0 on success, or the command's exit code if executed.
-int command_line(
-	const uint8_t *data, long file_size,
-	unsigned int cursor, unsigned int char_len,
-	unsigned int *state
-) {
-	static uint8_t g_cmdline_buf[2 * 1024 * 1024];
-	static size_t  g_cmdline_cursor = 0;
-
-	if (*state == SINGLE_QUOTED || data[cursor] != '\n') {
-		memcpy(&g_cmdline_buf[g_cmdline_cursor], &data[cursor], char_len);
-		g_cmdline_cursor += char_len;
-	}
-
-	if (*state != COMMAND_LINE) return 0;
-
-	int should_run =
-		(long)(cursor + char_len) >= file_size
-		|| data[cursor] == '\n' && data[cursor + 1] != ' ' && data[cursor + 1] != '\t';
-
-	if (!should_run) return 0;
-
-	size_t len = g_cmdline_cursor;
-	*state = TOP_LEVEL;
-	g_cmdline_buf[g_cmdline_cursor] = '\0';
-	g_cmdline_cursor = 0;
-
-	if (exec_builtin_command(g_cmdline_buf, len)) return 0;
-
-	int result = execute_command((char *)g_cmdline_buf);
-	if (result != 0) fprintf(stderr, "Command exited with code %d: %s", result, g_cmdline_buf);
-
-	return result;
+	return TLI_END_OF_FILE;
 }
 
 int main(int argc, const char *const argv[]) {
@@ -112,7 +75,7 @@ int main(int argc, const char *const argv[]) {
 		return 1;
 	}
 
-	const long file_size = get_file_size(fp);
+	const size_t file_size = get_file_size(fp);
 	if (file_size == LONG_MAX) {
 		fprintf(stderr, "Failed to seek in '%s'\n", argv[1]);
 		fclose(fp);
@@ -128,68 +91,41 @@ int main(int argc, const char *const argv[]) {
 
 	fclose(fp);
 
-	unsigned int cursor      = 0;
-	unsigned int line_number = 1;
-	unsigned int state      = TOP_LEVEL;
-	unsigned int prev_state = TOP_LEVEL;
+	Context ctx = {
+		argv[1],   // file_name
+		data,      // data
+		file_size, // file_size
+		0,         // cursor
+		1,         // line_number
+	};
+	static uint8_t *cmdline[1024];
+	static uint8_t  buf[2 * 1024 * 1024];
+	CommandLineBuffer clb = {
+		buf,         // buf
+		0,           // start
+		0,           // cursor
+		cmdline,     // cmdline
+		0,           // token_count
+		TS_NEUTORAL, // state
+	};
 
-	while ((long)cursor < file_size) {
-		const unsigned int char_len = get_utf8_char_length(data[cursor]);
-		if (!char_len) {
-			fprintf(stderr, "Invalid character found: %s (%u)\n", argv[1], line_number);
-			free((void *)data);
-			return 1;
-		}
-
-		if (state == TOP_LEVEL && !top_level(data[cursor], &state, &prev_state)) {
-			fprintf(stderr, ": %s (%u)\n", argv[1], line_number);
-			free((void *)data);
-			return 1;
-		}
-
-		if (data[cursor] == '\'') {
-			if (state == COMMAND_LINE)       state = SINGLE_QUOTED;
-			else if (state == SINGLE_QUOTED) state = COMMAND_LINE;
-		}
-		if (data[cursor] == '"') {
-			if (state == COMMAND_LINE)       state = DOUBLE_QUOTED;
-			else if (state == DOUBLE_QUOTED) state = COMMAND_LINE;
-		}
-
-		switch (state) {
-		case COMMAND_LINE:
-		case SINGLE_QUOTED:
-		case DOUBLE_QUOTED:
-			if (command_line(data, file_size, cursor, char_len, &state) != 0) {
-				fprintf(stderr, ": %s (%u)\n", argv[1], line_number);
-				free((void *)data);
-				return 1;
+	while (1) {
+		int cmdline_res;
+		switch (find_next_top_level_item(&ctx)) {
+		case TLI_END_OF_FILE:
+			goto end_process;
+		case TLI_COMMAND_LINE:
+			cmdline_res = eval_cmdline(&ctx, &clb);
+			if (cmdline_res != 0) {
+				// TODO: show command and line number.
+				fprintf(stderr, "Command exited with %d: %s\n", cmdline_res, ctx.file_name);
+				exit(1);
 			}
 			break;
-
-		case COMMENT:
-			if (data[cursor] == '\n') state = prev_state;
-			break;
-
-		default:
-			break;
 		}
-
-		if (data[cursor] == '\n') line_number++;
-		cursor += char_len;
 	}
 
-	if (state == SINGLE_QUOTED) {
-		fprintf(stderr, "Unclosed single quote: %s\n", argv[1]);
-		free((void *)data);
-		return 1;
-	}
-	if (state == DOUBLE_QUOTED) {
-		fprintf(stderr, "Unclosed double quote: %s\n", argv[1]);
-		free((void *)data);
-		return 1;
-	}
-
+end_process:
 	free((void *)data);
 	return 0;
 }
