@@ -27,12 +27,12 @@ def test_error(name):
 
 def test_stdout(name):
 	global error
-	result = subprocess.run([TRISH, name], capture_output=True, text=True)
+	result = subprocess.run([TRISH, name], capture_output=True, encoding='utf-8')
 	if result.returncode == 2:
 		error = True
 		print(f"[test] fail: {name} (internal)")
 		return
-	expected = Path(f"{name}.txt").read_text()
+	expected = Path(f"{name}.txt").read_text(encoding='utf-8')
 	if result.returncode != 0 or result.stdout != expected:
 		error = True
 		print(f"[test] fail: {name}")
