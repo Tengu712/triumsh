@@ -1,5 +1,6 @@
 #include "cmdline.h"
 #include "context.h"
+#include "file.h"
 
 #include <limits.h>
 #include <stdint.h>
@@ -10,25 +11,6 @@
 #if CHAR_BIT != 8
 #error "This application requires CHAR_BIT == 8"
 #endif
-
-// Returns file size in bytes, or LONG_MAX on failure.
-size_t get_file_size(FILE *fp) {
-	if (fseek(fp, 0, SEEK_END)) return LONG_MAX;
-	const long file_size = ftell(fp);
-	if (fseek(fp, 0, SEEK_SET)) return LONG_MAX;
-	return (size_t)file_size;
-}
-
-// Allocates and reads file contents with null termination.
-// Returns NULL on failure.
-uint8_t *read_file(FILE *fp, size_t file_size) {
-	uint8_t *const data = (uint8_t *)malloc(file_size + 1);
-	if (!data) return NULL;
-	const size_t readed_size = fread((void *)data, 1, file_size, fp);
-	if (readed_size < file_size) return NULL;
-	data[readed_size] = '\0';
-	return data;
-}
 
 typedef enum TopLevelItem_t {
 	TLI_END_OF_FILE = 0,
@@ -91,12 +73,14 @@ int main(int argc, const char *const argv[]) {
 
 	fclose(fp);
 
-	Context ctx = {
-		argv[1],   // file_name
+	FileInfo fi = {
+		argv[1],   // name
 		data,      // data
-		file_size, // file_size
-		0,         // cursor
-		1,         // line_number
+		file_size, // size
+	};
+	Cursor ctx = {
+		data, // ptr
+		1,    // line
 	};
 	static uint8_t *cmdline[1024];
 	static uint8_t  buf[2 * 1024 * 1024];
