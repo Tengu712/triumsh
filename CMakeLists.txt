@@ -2,7 +2,7 @@ CMAKE_MINIMUM_REQUIRED(VERSION 3.31.0)
 project(triumsh C)
 
 if(MSVC)
-	set(COMMON_COMPILE_OPTIONS /W4)
+	set(COMMON_COMPILE_OPTIONS /W4 /utf-8)
 else()
 	set(COMMON_COMPILE_OPTIONS -Wall -Wextra -Wpedantic)
 endif()
