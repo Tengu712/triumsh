@@ -1,6 +1,7 @@
 #pragma once
 
-#include "context.h"
+#include "cursor.h"
+#include "file.h"
 
 #include <string.h>
 
@@ -19,4 +20,4 @@ typedef struct CommandLineBuffer_t {
 	TokenizingState state;
 } CommandLineBuffer;
 
-int eval_cmdline(Context *ctx, CommandLineBuffer *clb);
+Cursor eval_cmdline(FileInfo *fi, Cursor cur, CommandLineBuffer *clb, int *exit_code);

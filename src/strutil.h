@@ -4,6 +4,11 @@
 #include <stdint.h>
 #include <string.h>
 
+// Returns 1 if `c` is whitespace, 0 otherwise.
+static inline int is_whitespace(uint8_t c) {
+	return c == ' ' || c == '\t';
+}
+
 // Returns UTF-8 character length in bytes from the first byte, or 0 if invalid.
 static inline size_t get_utf8_char_length(uint8_t first_byte) {
 	if ((first_byte & 0x80) == 0x00) return 1; // 0xxxxxxx

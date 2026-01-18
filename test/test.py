@@ -5,37 +5,45 @@ from pathlib import Path
 TRISH = Path("../build/trish")
 error = False
 
-def test_success(name):
+def test_unit(name):
 	global error
-	result = subprocess.run([TRISH, name], capture_output=True)
+	if subprocess.run([name]).returncode != 0:
+		error = True
+
+def test_trish(name, expected):
+	global error
+	print(f"test: {name} ... ", end="")
+	result = subprocess.run([TRISH, name], capture_output=True, encoding="utf-8")
 	if result.returncode == 2:
 		error = True
-		print(f"[test] fail: {name} (internal)")
-	elif result.returncode != 0:
+		print("fail (internal)")
+		return None
+	elif result.returncode != expected:
 		error = True
-		print(f"[test] fail: {name}")
+		print("fail")
+		return None
+	else:
+		print("ok")
+		return result
+
+def test_success(name):
+	test_trish(name, 0)
 
 def test_error(name):
-	global error
-	result = subprocess.run([TRISH, name], capture_output=True)
-	if result.returncode == 2:
-		error = True
-		print(f"[test] fail: {name} (internal)")
-	elif result.returncode != 1:
-		error = True
-		print(f"[test] fail: {name}")
+	test_trish(name, 1)
 
 def test_stdout(name):
-	global error
-	result = subprocess.run([TRISH, name], capture_output=True, encoding='utf-8')
-	if result.returncode == 2:
-		error = True
-		print(f"[test] fail: {name} (internal)")
-		return
-	expected = Path(f"{name}.txt").read_text(encoding='utf-8')
-	if result.returncode != 0 or result.stdout != expected:
-		error = True
-		print(f"[test] fail: {name}")
+	result = test_trish(name, 0)
+	if result:
+		global error
+		print(f"test: {name}.txt ... ", end="")
+		if result.stdout != Path(f"{name}.txt").read_text(encoding="utf-8"):
+			error = True
+			print("fail")
+		else:
+			print("ok")
+
+test_unit("../build/test_cursor")
 
 test_success("empty.trish")
 test_success("simple.trish")
@@ -49,6 +57,7 @@ test_error("err-command-exit-not-0.trish")
 test_stdout("echo.trish")
 
 if error:
+	print("some tests failed.")
 	sys.exit(1)
 else:
-	print("[test] all tests passed.")
+	print("all tests passed.")
