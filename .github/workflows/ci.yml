@@ -33,7 +33,7 @@ jobs:
       - name: Build (MSVC)
         if: runner.os == 'Windows'
         run: |
-          rd /S /Q build
+          Remove-Item -Recurse -Force build
           cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TEST=ON
           cmake --build build
 
