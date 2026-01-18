@@ -1,6 +1,12 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.31.0)
 project(triumsh C)
 
+if(MSVC)
+	set(COMMON_COMPILE_OPTIONS /W4)
+else()
+	set(COMMON_COMPILE_OPTIONS -Wall -Wextra -Wpedantic)
+endif()
+
 set(SOURCES
 	src/cmdline.c
 	src/exec.c
@@ -14,9 +20,9 @@ else()
 endif()
 
 add_executable(trish ${SOURCES})
+target_compile_options(trish PRIVATE ${COMMON_COMPILE_OPTIONS})
 
-if(MSVC)
-	target_compile_options(trish PRIVATE /W4)
-else()
-	target_compile_options(trish PRIVATE -Wall -Wextra -Wpedantic)
+if(BUILD_TEST)
+	add_executable(test_cursor src/cursor_test.c)
+	target_compile_options(test_cursor PRIVATE ${COMMON_COMPILE_OPTIONS})
 endif()
