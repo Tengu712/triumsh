@@ -1,5 +1,5 @@
 #pragma once
 
-#include "cursor.h"
+#include <stdint.h>
 
-void eval(const char *file_name, Cursor cur);
+void eval(const char *file_name, const uint8_t *data);

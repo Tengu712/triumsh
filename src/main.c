@@ -56,11 +56,7 @@ int main(int argc, const char *const argv[]) {
 
 	fclose(fp);
 
-	Cursor cur = {
-		data, // ptr
-		1,    // line
-	};
-	eval(argv[1], cur);
+	eval(argv[1], data);
 
 	free((void *)data);
 	return 0;

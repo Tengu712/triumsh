@@ -1,5 +1,6 @@
 #include "eval.h"
 
+#include "cursor.h"
 #include "exec.h"
 
 #include <stdio.h>
@@ -177,10 +178,14 @@ Cursor pr_top_level(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
 	}
 }
 
-void eval(const char *file_name, Cursor cur) {
+void eval(const char *file_name, const uint8_t *data) {
 	static uint8_t  buf[2 * 1024 * 1024];
 	static uint8_t *cmdline[1024];
 
+	Cursor cur = {
+		data, // ptr
+		1,    // line
+	};
 	CommandLineBuffer clb = {
 		buf,     // start
 		buf,     // ptr
