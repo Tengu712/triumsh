@@ -1,5 +1,4 @@
 #include "cmdline.h"
-#include "context.h"
 #include "file.h"
 
 #include <limits.h>
@@ -17,23 +16,24 @@ typedef enum TopLevelItem_t {
 	TLI_COMMAND_LINE,
 } TopLevelItem;
 
-TopLevelItem find_next_top_level_item(Context *ctx) {
-	while (is_continue(ctx)) {
-		switch (ctx->data[ctx->cursor]) {
+TopLevelItem find_next_top_level_item(FileInfo *fi, Cursor *cur) {
+	while (*cur->ptr) {
+		int has_error = 0;
+		switch (*cur->ptr) {
 		// Skip a whiteline.
 		case '\n':
-			advance_cursor(ctx);
+			*cur = advance_cursor(*cur, &has_error);
 			break;
 
 		// Skip a comment line.
 		case '#':
-			skip_to_next_newline(ctx);
+			*cur = skip_line(*cur, &has_error);
 			break;
 
 		// Disallow whitespace at top level.
 		case ' ':
 		case '\t':
-			fprintf(stderr, "Whitespace not allowed at top level: %s (%zu)\n", ctx->file_name, ctx->line_number);
+			fprintf(stderr, "Whitespace not allowed at top level: %s (%zu)\n", fi->name, cur->line);
 			exit(1);
 			break;
 
@@ -78,7 +78,7 @@ int main(int argc, const char *const argv[]) {
 		data,      // data
 		file_size, // size
 	};
-	Cursor ctx = {
+	Cursor cur = {
 		data, // ptr
 		1,    // line
 	};
@@ -94,15 +94,15 @@ int main(int argc, const char *const argv[]) {
 	};
 
 	while (1) {
-		int cmdline_res;
-		switch (find_next_top_level_item(&ctx)) {
+		int exit_code = 0;
+		switch (find_next_top_level_item(&fi, &cur)) {
 		case TLI_END_OF_FILE:
 			goto end_process;
 		case TLI_COMMAND_LINE:
-			cmdline_res = eval_cmdline(&ctx, &clb);
-			if (cmdline_res != 0) {
+			cur = eval_cmdline(&fi, cur, &clb, &exit_code);
+			if (exit_code != 0) {
 				// TODO: show command and line number.
-				fprintf(stderr, "Command exited with %d: %s\n", cmdline_res, ctx.file_name);
+				fprintf(stderr, "Command exited with %d: %s\n", exit_code, fi.name);
 				exit(1);
 			}
 			break;

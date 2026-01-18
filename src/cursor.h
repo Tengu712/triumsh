@@ -12,20 +12,20 @@ typedef struct Cursor_t {
 //
 // NOTE: `cur` must not be ended.
 static inline Cursor advance_cursor(Cursor cur, int *has_error) {
-	if (*cur.ptr == '\n') return {cur.ptr + 1, cur.line + 1};
+	if (*cur.ptr == '\n') return (Cursor){cur.ptr + 1, cur.line + 1};
 
 	const size_t advance = get_utf8_char_length(*cur.ptr);
 	if (!advance) {
 		*has_error = 1;
-		return {cur.ptr + 1, cur.line};
+		return (Cursor){cur.ptr + 1, cur.line};
 	}
 	for (size_t i = 0; i < advance; ++i) {
 		if (!cur.ptr[i]) {
 			*has_error = 1;
-			return {cur.ptr + 1, cur.line};
+			return (Cursor){cur.ptr + 1, cur.line};
 		}
 	}
-	return {cur.ptr + advance, cur.line};
+	return (Cursor){cur.ptr + advance, cur.line};
 }
 
 // Skips whitespaces.
@@ -36,7 +36,7 @@ static inline Cursor advance_cursor(Cursor cur, int *has_error) {
 // NOTE: `cur` must not be ended.
 static inline Cursor skip_whitespaces(Cursor cur) {
 	while (*cur.ptr && is_whitespace(*cur.ptr)) cur.ptr++;
-	return {cur.ptr, cur.line};
+	return (Cursor){cur.ptr, cur.line};
 }
 
 // Skips the line.

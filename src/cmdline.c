@@ -2,15 +2,14 @@
 
 #include "exec.h"
 
-void write_cmdline_buf(CommandLineBuffer *clb, Context *ctx, size_t start, size_t end) {
-	// VALIDATION:
-	if (end <= start) {
-		fprintf(stderr, "Internal error: try to write 0 length token to cmdline buf\n");
-		exit(2);
+#define ERROR_INVALID_CHARACTER_FOUND(name, line) { \
+		fprintf(stderr, "Invalid character found: %s (%zu)\n", (name), (line)); \
+		exit(1); \
 	}
 
-	memcpy(&clb->buf[clb->cursor], &ctx->data[start], end - start);
-	clb->cursor += end - start;
+void write_cmdline_buf(CommandLineBuffer *clb, const uint8_t *src, size_t size) {
+	memcpy(&clb->buf[clb->cursor], src, size);
+	clb->cursor += size;
 }
 
 void flush_token(CommandLineBuffer *clb) {
@@ -28,80 +27,104 @@ void flush_token(CommandLineBuffer *clb) {
 	clb->state = TS_NEUTORAL;
 }
 
-void on_newline_found(Context *ctx, CommandLineBuffer *clb) {
-	advance_cursor(ctx);
+Cursor on_newline_found(Cursor cur, CommandLineBuffer *clb) {
+	int has_error = 0;
+	cur = advance_cursor(cur, &has_error);
 
 	switch (clb->state) {
 	case TS_IN_TOKEN:
 		flush_token(clb);
-		break;
+		return cur;
 	case TS_DOUBLE_QUOTED:
 		clb->buf[clb->cursor++] = '\n';
-		break;
+		return cur;
 	default:
-		break;
+		return cur;
 	}
 }
 
-void on_whitespace_found(Context *ctx, CommandLineBuffer *clb) {
-	const size_t start = ctx->cursor;
-	skip_whitespaces(ctx);
+Cursor on_whitespace_found(Cursor cur, CommandLineBuffer *clb) {
+	const uint8_t *start = cur.ptr;
+	cur = skip_whitespaces(cur);
 
 	switch (clb->state) {
 	case TS_IN_TOKEN:
 		flush_token(clb);
-		break;
+		return cur;
 	case TS_DOUBLE_QUOTED:
-		write_cmdline_buf(clb, ctx, start, ctx->cursor);
-		break;
+		write_cmdline_buf(clb, start, cur.ptr - start);
+		return cur;
 	default:
-		break;
+		return cur;
 	}
 }
 
-void on_single_quote_found(Context *ctx, CommandLineBuffer *clb) {
-	const size_t start       = ++ctx->cursor;
-	const size_t line_number = ctx->line_number;
-
+Cursor on_single_quote_found(FileInfo *fi, Cursor cur, CommandLineBuffer *clb) {
 	if (clb->state == TS_DOUBLE_QUOTED) {
+		cur.ptr++;
 		clb->buf[clb->cursor++] = '\'';
-		return;
+		return cur;
 	}
 
 	clb->state = TS_IN_TOKEN;
-	if (!skip_to_next_single_quote(ctx)) {
-		fprintf(stderr, "Unclosed single quote found: %s (%zu)\n", ctx->file_name, line_number);
+
+	// Skip the current single quote.
+	cur.ptr++;
+	const Cursor start = cur;
+
+	// Skip the contents.
+	int has_error = 0;
+	cur = skip_to_after_single_quote(cur, &has_error);
+	if (has_error == 2) {
+		fprintf(stderr, "Unclosed single quote found: %s (%zu)\n", fi->name, start.line);
 		exit(1);
 	}
-	write_cmdline_buf(clb, ctx, start, ctx->cursor - 1);
+	else if (has_error) ERROR_INVALID_CHARACTER_FOUND(fi->name, start.line) // TODO: show correct line.
+
+	// Write the contents.
+	write_cmdline_buf(clb, start.ptr, cur.ptr - 1 - start.ptr);
+	return cur;
 }
 
-void on_double_quote_found(Context *ctx, CommandLineBuffer *clb) {
-	const size_t start = ++ctx->cursor;
-
+Cursor on_double_quote_found(FileInfo *fi, Cursor cur, CommandLineBuffer *clb) {
 	if (clb->state == TS_DOUBLE_QUOTED) {
 		clb->state = TS_IN_TOKEN;
-		return;
+		cur.ptr++;
+		return cur;
 	}
 
 	clb->state = TS_DOUBLE_QUOTED;
-	skip_until_special_char(ctx);
-	if (ctx->cursor == start) return;
-	write_cmdline_buf(clb, ctx, start, ctx->cursor);
+
+	// Skip the current double quote.
+	cur.ptr++;
+	const Cursor start = cur;
+
+	// Skip until any special character.
+	int has_error = 0;
+	cur = skip_until_special_char(cur, &has_error);
+	if (cur.ptr == start.ptr) return cur;
+	if (has_error) ERROR_INVALID_CHARACTER_FOUND(fi->name, start.line); // TODO: show correct line.
+
+	// Write the contents.
+	write_cmdline_buf(clb, start.ptr, cur.ptr - start.ptr);
+	return cur;
 }
 
-void on_general_char_found(Context *ctx, CommandLineBuffer *clb) {
+Cursor on_general_char_found(FileInfo *fi, Cursor cur, CommandLineBuffer *clb) {
 	if (clb->state == TS_NEUTORAL) clb->state = TS_IN_TOKEN;
-	const size_t start = ctx->cursor;
-	skip_until_special_char(ctx);
-	write_cmdline_buf(clb, ctx, start, ctx->cursor);
+	const Cursor start = cur;
+	int has_error = 0;
+	cur = skip_until_special_char(cur, &has_error);
+	if (has_error) ERROR_INVALID_CHARACTER_FOUND(fi->name, start.line) // TODO: show correct line.
+	write_cmdline_buf(clb, start.ptr, cur.ptr - start.ptr);
+	return cur;
 }
 
-int execute_command_safely(Context *ctx, CommandLineBuffer *clb) {
+int execute_command_safely(FileInfo *fi, CommandLineBuffer *clb) {
 	if (clb->state == TS_IN_TOKEN) flush_token(clb);
 	else if (clb->state == TS_DOUBLE_QUOTED) {
 		// TODO: show line number.
-		fprintf(stderr, "Unclosed double quote found: %s\n", ctx->file_name);
+		fprintf(stderr, "Unclosed double quote found: %s\n", fi->name);
 		exit(1);
 	}
 
@@ -114,32 +137,33 @@ int execute_command_safely(Context *ctx, CommandLineBuffer *clb) {
 	return execute_command((const uint8_t *const *)clb->cmdline, count);
 }
 
-int eval_cmdline(Context *ctx, CommandLineBuffer *clb) {
-	while (is_continue(ctx)) {
-		switch (ctx->data[ctx->cursor]) {
+Cursor eval_cmdline(FileInfo *fi, Cursor cur, CommandLineBuffer *clb, int *exit_code) {
+	while (*cur.ptr) {
+		switch (*cur.ptr) {
 		case '\n':
-			on_newline_found(ctx, clb);
-			if (clb->state == TS_NEUTORAL && !is_whitespace(ctx)) goto end_tokenizing;
+			cur = on_newline_found(cur, clb);
+			if (clb->state == TS_NEUTORAL && !is_whitespace(*cur.ptr)) goto end_tokenizing;
 			break;
 
 		case ' ':
 		case '\t':
-			on_whitespace_found(ctx, clb);
+			cur = on_whitespace_found(cur, clb);
 			break;
 
 		case '\'':
-			on_single_quote_found(ctx, clb);
+			cur = on_single_quote_found(fi, cur, clb);
 			break;
 
 		case '"':
-			on_double_quote_found(ctx, clb);
+			cur = on_double_quote_found(fi, cur, clb);
 			break;
 
 		default:
-			on_general_char_found(ctx, clb);
+			cur = on_general_char_found(fi, cur, clb);
 			break;
 		}
 	}
 end_tokenizing:
-	return execute_command_safely(ctx, clb);
+	*exit_code = execute_command_safely(fi, clb);
+	return cur;
 }
