@@ -29,13 +29,6 @@ void write_cmdline_buf(CommandLineBuffer *clb, const uint8_t *src, size_t size) 
 	clb->ptr += size;
 }
 
-void flush_token(CommandLineBuffer *clb) {
-	clb->cmdline[clb->token_count] = clb->start;
-	clb->token_count++;
-	*clb->ptr++ = '\0';
-	clb->start = clb->ptr;
-}
-
 Cursor consume_until_special_char(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
 	int has_error = 0;
 	Cursor new_cur = skip_until_special_char(cur, &has_error);
@@ -106,6 +99,10 @@ Cursor pr_token(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
 		}
 	}
 end_token:
+	clb->cmdline[clb->token_count] = clb->start;
+	clb->token_count++;
+	*clb->ptr++ = '\0';
+	clb->start = clb->ptr;
 	return cur;
 }
 
@@ -132,7 +129,6 @@ Cursor pr_cmdline(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
 
 	const size_t start_line = cur.line;
 	cur = pr_token(file_name, cur, &new_clb);
-	flush_token(&new_clb);
 
 	while (*cur.ptr) {
 		int ended = 0;
@@ -144,7 +140,6 @@ Cursor pr_cmdline(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
 			break;
 		default:
 			cur = pr_token(file_name, cur, &new_clb);
-			flush_token(&new_clb);
 			break;
 		}
 		if (ended) break;
