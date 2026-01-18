@@ -1,5 +1,6 @@
 #include "eval.h"
-#include "eval_internal.h"
+
+#include "exec.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,12 +16,145 @@
 		exit(1); \
 	}
 
-Cursor eat_until_special_char(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
+typedef struct CommandLineBuffer_t {
+	uint8_t        *start;
+	uint8_t        *ptr;
+	uint8_t **const cmdline;
+	size_t          token_count;
+} CommandLineBuffer;
+
+void write_cmdline_buf(CommandLineBuffer *clb, const uint8_t *src, size_t size) {
+	memcpy(clb->ptr, src, size);
+	clb->ptr += size;
+}
+
+void flush_token(CommandLineBuffer *clb) {
+	clb->cmdline[clb->token_count] = clb->start;
+	clb->token_count++;
+	*clb->ptr++ = '\0';
+	clb->start = clb->ptr;
+}
+
+Cursor consume_until_special_char(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
 	int has_error = 0;
 	Cursor new_cur = skip_until_special_char(cur, &has_error);
 	CHECK_INVALID_CHARACTER_FOUND(file_name, cur.line)
 	write_cmdline_buf(clb, cur.ptr, new_cur.ptr - cur.ptr);
 	return new_cur;
+}
+
+Cursor pr_single_quoted(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
+	int has_error = 0;
+	Cursor new_cur = skip_to_after_single_quote(cur, &has_error);
+	CHECK_INVALID_CHARACTER_FOUND(file_name, cur.line) // TODO: correct line.
+	CHECK_SINGLE_QUOTE_NOT_FOUND(file_name, cur.line)
+	write_cmdline_buf(clb, cur.ptr, new_cur.ptr - 1 - cur.ptr);
+	return new_cur;
+}
+
+Cursor pr_double_quoted(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
+	const size_t start_line = cur.line;
+	while (*cur.ptr) {
+		int has_error = 0;
+		// TODO: Implement \ and $.
+		switch (*cur.ptr) {
+		case '"':
+			cur.ptr++;
+			return cur;
+		case ' ':
+		case '\t':
+			{
+				const Cursor new_cur = skip_whitespaces(cur);
+				write_cmdline_buf(clb, cur.ptr, new_cur.ptr - cur.ptr);
+				cur = new_cur;
+			}
+			break;
+		case '\'':
+		case '\n':
+			write_cmdline_buf(clb, cur.ptr, 1);
+			cur = advance_cursor(cur, &has_error);
+			break;
+		default:
+			cur = consume_until_special_char(file_name, cur, clb);
+			break;
+		}
+	}
+	fprintf(stderr, "Unclosed double quote found: %s (%zu)\n", file_name, start_line);
+	exit(1);
+}
+
+Cursor pr_token(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
+	while (*cur.ptr) {
+		// TODO: Implement \ and $.
+		switch (*cur.ptr) {
+		case ' ':
+		case '\t':
+		case '\n':
+			goto end_token;
+		case '\'':
+			cur.ptr++;
+			cur = pr_single_quoted(file_name, cur, clb);
+			break;
+		case '"':
+			cur.ptr++;
+			cur = pr_double_quoted(file_name, cur, clb);
+			break;
+		default:
+			cur = consume_until_special_char(file_name, cur, clb);
+			break;
+		}
+	}
+end_token:
+	return cur;
+}
+
+// NOTE: This function consume a newline even if the command line should be ended.
+Cursor pr_token_sep(Cursor cur, int *ended) {
+	if (*cur.ptr == '\n') {
+		int has_error = 0;
+		cur = advance_cursor(cur, &has_error);
+		if (!is_whitespace(*cur.ptr)) {
+			*ended = 1;
+			return cur;
+		}
+	}
+	return skip_whitespaces(cur);
+}
+
+Cursor pr_cmdline(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
+	CommandLineBuffer new_clb = {
+		clb->ptr,                        // start
+		clb->ptr,                        // ptr
+		&clb->cmdline[clb->token_count], // cmdline
+		0,                               // token_count
+	};
+
+	const size_t start_line = cur.line;
+	cur = pr_token(file_name, cur, &new_clb);
+	flush_token(&new_clb);
+
+	while (*cur.ptr) {
+		int ended = 0;
+		switch (*cur.ptr) {
+		case ' ':
+		case '\t':
+		case '\n':
+			cur = pr_token_sep(cur, &ended);
+			break;
+		default:
+			cur = pr_token(file_name, cur, &new_clb);
+			flush_token(&new_clb);
+			break;
+		}
+		if (ended) break;
+	}
+
+	int exit_code = execute_command((const uint8_t *const *)new_clb.cmdline, new_clb.token_count);
+	if (exit_code) {
+		fprintf(stderr, "Command exited with %d: %s (%zu)\n", exit_code, file_name, start_line);
+		exit(1);
+	}
+	return cur;
 }
 
 Cursor pr_top_level(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
@@ -30,7 +164,6 @@ Cursor pr_top_level(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
 	case '\t':
 		fprintf(stderr, "Whitespace not allowed at top level: %s (%zu)\n", file_name, cur.line);
 		exit(1);
-		return cur;
 	case '\n':
 		cur = advance_cursor(cur, &has_error);
 		CHECK_INVALID_CHARACTER_FOUND(file_name, cur.line) // TODO: correct line.
@@ -44,49 +177,7 @@ Cursor pr_top_level(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
 	}
 }
 
-Cursor pr_cmdline(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
-	CommandLineBuffer new_clb = {
-		clb->ptr,     // start
-		clb->ptr,     // ptr
-		cmdline, // cmdline
-		0,       // token_count
-	};
-
-	int has_error = 0;
-	switch (*cur.ptr) {
-	case ' ':
-	case '\t':
-		
-	default:
-	}
-}
-
-Cursor pr_token(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
-	int has_error = 0;
-	// TODO: handle escape character.
-	// TODO: handle env or emb.
-	switch (*cur.ptr) {
-	case '\'':
-		cur.ptr++;
-		return pr_single_quoted(file_name, cur, clb);
-	case '"':
-		cur.ptr++;
-	default:
-		cur = eat_until_special_char(file_name, cur, clb);
-		return pr_token(file_name, cur, clb);
-	}
-}
-
-Cursor pr_single_quoted(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
-	int has_error = 0;
-	Cursor new_cur = skip_to_after_single_quote(cur, &has_error);
-	CHECK_INVALID_CHARACTER_FOUND(file_name, cur.line) // TODO: correct line.
-	CHECK_SINGLE_QUOTE_NOT_FOUND(file_name, cur.line)
-	write_cmdline_buf(clb, cur.ptr, new_cur.ptr - 1 - cur.ptr);
-	return pr_token(file_name, new_cur, clb);
-}
-
-int eval(const char *file_name, Cursor cur) {
+void eval(const char *file_name, Cursor cur) {
 	static uint8_t  buf[2 * 1024 * 1024];
 	static uint8_t *cmdline[1024];
 
@@ -96,4 +187,8 @@ int eval(const char *file_name, Cursor cur) {
 		cmdline, // cmdline
 		0,       // token_count
 	};
+
+	while (*cur.ptr) {
+		cur = pr_top_level(file_name, cur, &clb);
+	}
 }

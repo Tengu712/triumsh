@@ -2,4 +2,4 @@
 
 #include "cursor.h"
 
-int eval(const char *file_name, Cursor cur);
+void eval(const char *file_name, Cursor cur);
