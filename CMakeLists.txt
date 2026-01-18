@@ -8,7 +8,7 @@ else()
 endif()
 
 set(SOURCES
-	src/cmdline.c
+	src/eval.c
 	src/exec.c
 	src/main.c
 )
