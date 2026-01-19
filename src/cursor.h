@@ -94,7 +94,6 @@ static inline Cursor skip_to_after_single_quote(Cursor cur, int *has_error) {
 // NOTE: `has_error` must be initialized to 0.
 static inline Cursor skip_until_special_char(Cursor cur, int *has_error) {
 	while (*cur.ptr && !*has_error) {
-		// TODO: add $.
 		switch (*cur.ptr) {
 		case ' ':
 		case '\t':
@@ -102,6 +101,7 @@ static inline Cursor skip_until_special_char(Cursor cur, int *has_error) {
 		case '\'':
 		case '"':
 		case '\\':
+		case '$':
 			return cur;
 		default:
 			cur = advance_cursor(cur, has_error);

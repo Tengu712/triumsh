@@ -3,7 +3,9 @@
 ```ebnf
 lf_or_eof = "\n" | "\0" ;
 
-special   = " " | "\t" | "\n" | "'" | "\"" | "\\" ;
+letter    = "a" | ... | "z" | "A" | ... | "Z" ;
+digit     = "0" | ... | "9" ;
+special   = " " | "\t" | "\n" | "'" | "\"" | "\\" | "$" ;
 character = ? UTF-8 character except for special ?;
 
 whitespace  = " " | "\t" ;
@@ -12,13 +14,16 @@ escaped     = "\\" , "'" | "\\" , "\"" | "\\" , "\\" ;
 comment_content = character | ? special except for "\n" ?;
 comment         = "#" , { comment_content } , lf_or_eof ;
 
+variable  = ( letter | "_" ) , { letter | digit | "_" };
+expansion = "$" , variable ;
+
 single_quoted_content = ? UTF-8 character except for "'" ?;
 single_quoted         = "'" , { single_quote_content } , "'" ;
 
-double_quoted_content = character | whitespace | escaped | "'" | "\n" ;
+double_quoted_content = character | whitespace | expansion | escaped | "'" | "\n" ;
 double_quoted         = "\"" , { double_quoted_content } , "\"" ;
 
-token_part = single_quoted | double_quoted | character | escaped ;
+token_part = single_quoted | double_quoted | expansion | escaped | character ;
 token      = { token_part };
 
 token_sep = [ "\n" ] , whitespace ;

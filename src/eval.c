@@ -37,17 +37,45 @@ Cursor consume_until_special_char(const char *file_name, Cursor cur, CommandLine
 	return new_cur;
 }
 
-Cursor pr_escape(const char *file_name, Cursor cur) {
+Cursor pr_escape(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
 	switch (*cur.ptr) {
 	case '\'':
 	case '"':
 	case '\\':
+		write_cmdline_buf(clb, cur.ptr, 1);
 		cur.ptr++;
 		return cur;
 	default:
 		fprintf(stderr, "Invalid escape found: %s (%zu)\n", file_name, cur.line);
 		exit(1);
 	}
+}
+
+Cursor pr_variable(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
+	const uint8_t *start = cur.ptr;
+	if (is_letter(*cur.ptr) || *cur.ptr == '_') cur.ptr++;
+	else {
+		fprintf(stderr, "Invalid variable name: %s (%zu)\n", file_name, cur.line);
+		exit(1);
+	}
+	while (*cur.ptr && (is_letter(*cur.ptr) || is_digit(*cur.ptr) || *cur.ptr == '_')) cur.ptr++;
+
+	static char var_name[256];
+	const size_t name_len = cur.ptr - start;
+	if (name_len >= sizeof(char) * 256) {
+		fprintf(stderr, "Variable name too long: %s (%zu)\n", file_name, cur.line);
+		exit(1);
+	}
+	memcpy(var_name, start, name_len);
+	var_name[name_len] = '\0';
+
+	const char *value = getenv(var_name);
+	if (value) write_cmdline_buf(clb, (const uint8_t *)value, strlen(value));
+	return cur;
+}
+
+Cursor pr_expansion(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
+	return pr_variable(file_name, cur, clb);
 }
 
 Cursor pr_single_quoted(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
@@ -63,7 +91,6 @@ Cursor pr_double_quoted(const char *file_name, Cursor cur, CommandLineBuffer *cl
 	const size_t start_line = cur.line;
 	while (*cur.ptr) {
 		int has_error = 0;
-		// TODO: Implement $.
 		switch (*cur.ptr) {
 		case '"':
 			cur.ptr++;
@@ -81,9 +108,14 @@ Cursor pr_double_quoted(const char *file_name, Cursor cur, CommandLineBuffer *cl
 			write_cmdline_buf(clb, cur.ptr, 1);
 			cur = advance_cursor(cur, &has_error);
 			break;
+		case '$':
+			cur.ptr++;
+			cur = pr_expansion(file_name, cur, clb);
+			break;
 		case '\\':
 			cur.ptr++;
-			cur = pr_escape(file_name, cur);
+			cur = pr_escape(file_name, cur, clb);
+			break;
 		default:
 			cur = consume_until_special_char(file_name, cur, clb);
 			break;
@@ -95,7 +127,6 @@ Cursor pr_double_quoted(const char *file_name, Cursor cur, CommandLineBuffer *cl
 
 Cursor pr_token(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
 	while (*cur.ptr) {
-		// TODO: Implement $.
 		switch (*cur.ptr) {
 		case ' ':
 		case '\t':
@@ -109,9 +140,14 @@ Cursor pr_token(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
 			cur.ptr++;
 			cur = pr_double_quoted(file_name, cur, clb);
 			break;
+		case '$':
+			cur.ptr++;
+			cur = pr_expansion(file_name, cur, clb);
+			break;
 		case '\\':
 			cur.ptr++;
-			cur = pr_escape(file_name, cur);
+			cur = pr_escape(file_name, cur, clb);
+			break;
 		default:
 			cur = consume_until_special_char(file_name, cur, clb);
 			break;
