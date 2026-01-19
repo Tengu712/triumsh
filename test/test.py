@@ -47,12 +47,14 @@ test_unit("../build/test_cursor")
 
 test_success("empty.trish")
 test_success("simple.trish")
+test_success("escape.trish")
 
 test_error("err-toplevel-space.trish")
 test_error("err-unclosed-double.trish")
 test_error("err-unclosed-double.trish")
 test_error("err-command-not-found.trish")
 test_error("err-command-exit-not-0.trish")
+test_error("err-invalid-escape.trish")
 
 test_stdout("echo.trish")
 
