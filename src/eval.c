@@ -37,11 +37,12 @@ Cursor consume_until_special_char(const char *file_name, Cursor cur, CommandLine
 	return new_cur;
 }
 
-Cursor pr_escape(const char *file_name, Cursor cur) {
+Cursor pr_escape(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
 	switch (*cur.ptr) {
 	case '\'':
 	case '"':
 	case '\\':
+		write_cmdline_buf(clb, cur.ptr, 1);
 		cur.ptr++;
 		return cur;
 	default:
@@ -113,7 +114,8 @@ Cursor pr_double_quoted(const char *file_name, Cursor cur, CommandLineBuffer *cl
 			break;
 		case '\\':
 			cur.ptr++;
-			cur = pr_escape(file_name, cur);
+			cur = pr_escape(file_name, cur, clb);
+			break;
 		default:
 			cur = consume_until_special_char(file_name, cur, clb);
 			break;
@@ -144,7 +146,8 @@ Cursor pr_token(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
 			break;
 		case '\\':
 			cur.ptr++;
-			cur = pr_escape(file_name, cur);
+			cur = pr_escape(file_name, cur, clb);
+			break;
 		default:
 			cur = consume_until_special_char(file_name, cur, clb);
 			break;
