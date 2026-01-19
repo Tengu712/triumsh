@@ -37,6 +37,19 @@ Cursor consume_until_special_char(const char *file_name, Cursor cur, CommandLine
 	return new_cur;
 }
 
+Cursor pr_escape(const char *file_name, Cursor cur) {
+	switch (*cur.ptr) {
+	case '\'':
+	case '"':
+	case '\\':
+		cur.ptr++;
+		return cur;
+	default:
+		fprintf(stderr, "Invalid escape found: %s (%zu)\n", file_name, cur.line);
+		exit(1);
+	}
+}
+
 Cursor pr_single_quoted(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
 	int has_error = 0;
 	Cursor new_cur = skip_to_after_single_quote(cur, &has_error);
@@ -50,7 +63,7 @@ Cursor pr_double_quoted(const char *file_name, Cursor cur, CommandLineBuffer *cl
 	const size_t start_line = cur.line;
 	while (*cur.ptr) {
 		int has_error = 0;
-		// TODO: Implement \ and $.
+		// TODO: Implement $.
 		switch (*cur.ptr) {
 		case '"':
 			cur.ptr++;
@@ -68,6 +81,9 @@ Cursor pr_double_quoted(const char *file_name, Cursor cur, CommandLineBuffer *cl
 			write_cmdline_buf(clb, cur.ptr, 1);
 			cur = advance_cursor(cur, &has_error);
 			break;
+		case '\\':
+			cur.ptr++;
+			cur = pr_escape(file_name, cur);
 		default:
 			cur = consume_until_special_char(file_name, cur, clb);
 			break;
@@ -79,7 +95,7 @@ Cursor pr_double_quoted(const char *file_name, Cursor cur, CommandLineBuffer *cl
 
 Cursor pr_token(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
 	while (*cur.ptr) {
-		// TODO: Implement \ and $.
+		// TODO: Implement $.
 		switch (*cur.ptr) {
 		case ' ':
 		case '\t':
@@ -93,6 +109,9 @@ Cursor pr_token(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
 			cur.ptr++;
 			cur = pr_double_quoted(file_name, cur, clb);
 			break;
+		case '\\':
+			cur.ptr++;
+			cur = pr_escape(file_name, cur);
 		default:
 			cur = consume_until_special_char(file_name, cur, clb);
 			break;
