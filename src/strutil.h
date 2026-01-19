@@ -9,6 +9,16 @@ static inline int is_whitespace(uint8_t c) {
 	return c == ' ' || c == '\t';
 }
 
+// Returns 1 if `c` is a letter, 0 otherwise.
+static inline int is_letter(uint8_t c) {
+	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z';
+}
+
+// Returns 1 if `c` is a digit, 0 otherwise.
+static inline int is_digit(uint8_t c) {
+	return c >= '0' && c <= '9';
+}
+
 // Returns UTF-8 character length in bytes from the first byte, or 0 if invalid.
 static inline size_t get_utf8_char_length(uint8_t first_byte) {
 	if ((first_byte & 0x80) == 0x00) return 1; // 0xxxxxxx
