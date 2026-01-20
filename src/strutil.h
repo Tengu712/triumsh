@@ -11,7 +11,7 @@ static inline int is_whitespace(uint8_t c) {
 
 // Returns 1 if `c` is a letter, 0 otherwise.
 static inline int is_letter(uint8_t c) {
-	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z';
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
 }
 
 // Returns 1 if `c` is a digit, 0 otherwise.
