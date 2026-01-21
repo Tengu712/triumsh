@@ -242,7 +242,7 @@ Cursor pr_cmdline(const char *file_name, Cursor cur, CommandLineBuffer *clb, uin
 	}
 
 	if (piped) {
-		while (output_len > 1 && clb->ptr[output_len - 1] == '\n') output_len--;
+		while (output_len > 1 && (clb->ptr[output_len - 1] == '\r' || clb->ptr[output_len - 1] == '\n')) output_len--;
 		clb->ptr += output_len;
 	}
 	return cur;
