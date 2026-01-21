@@ -1,1 +1,1 @@
-git --version
+python -c "print('Hello, world!')"

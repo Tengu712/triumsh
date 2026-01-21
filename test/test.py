@@ -47,7 +47,6 @@ def test_stdout(name):
 test_unit("../build/test_cursor")
 
 test_success("empty.trish")
-test_success("simple.trish")
 
 test_error("err-toplevel-space.trish")
 test_error("err-unclosed-double.trish")
@@ -57,6 +56,7 @@ test_error("err-command-exit-not-0.trish")
 test_error("err-invalid-escape.trish")
 test_error("err-invalid-env.trish")
 
+test_stdout("simple.trish")
 test_stdout("echo.trish")
 test_stdout("escape.trish")
 test_stdout("env.trish")
