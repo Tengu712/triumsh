@@ -60,6 +60,7 @@ test_stdout("simple.trish")
 test_stdout("echo.trish")
 test_stdout("escape.trish")
 test_stdout("env.trish")
+test_stdout("exp-cmdline.trish")
 
 if error:
 	print("some tests failed.")

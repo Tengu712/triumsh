@@ -1,0 +1,2 @@
+ECHO $(ECHO foo)
+ECHO foo$(ECHO bar)baz

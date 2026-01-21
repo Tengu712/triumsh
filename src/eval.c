@@ -1,4 +1,5 @@
 #include "eval.h"
+#include "eval_internal.h"
 
 #include "cursor.h"
 #include "exec.h"
@@ -17,22 +18,19 @@
 		exit(1); \
 	}
 
-typedef struct CommandLineBuffer_t {
-	uint8_t        *start;
-	uint8_t        *ptr;
-	uint8_t **const cmdline;
-	size_t          token_count;
-} CommandLineBuffer;
-
 void write_cmdline_buf(CommandLineBuffer *clb, const uint8_t *src, size_t size) {
 	memcpy(clb->ptr, src, size);
 	clb->ptr += size;
 }
 
-Cursor consume_until_special_char(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
+Cursor consume_until_special_char(const char *file_name, Cursor cur, CommandLineBuffer *clb, int *empty) {
 	int has_error = 0;
 	Cursor new_cur = skip_until_special_char(cur, &has_error);
 	CHECK_INVALID_CHARACTER_FOUND(file_name, cur.line)
+	if (cur.ptr == new_cur.ptr) {
+		*empty = 1;
+		return new_cur;
+	}
 	write_cmdline_buf(clb, cur.ptr, new_cur.ptr - cur.ptr);
 	return new_cur;
 }
@@ -51,7 +49,7 @@ Cursor pr_escape(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
 	}
 }
 
-Cursor pr_variable(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
+Cursor pr_expansion_variable(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
 	const uint8_t *start = cur.ptr;
 	if (is_letter(*cur.ptr) || *cur.ptr == '_') cur.ptr++;
 	else {
@@ -75,7 +73,13 @@ Cursor pr_variable(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
 }
 
 Cursor pr_expansion(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
-	return pr_variable(file_name, cur, clb);
+	switch (*cur.ptr) {
+	case '(':
+		cur.ptr++;
+		return pr_cmdline(file_name, cur, clb, ')');
+	default:
+		return pr_expansion_variable(file_name, cur, clb);
+	}
 }
 
 Cursor pr_single_quoted(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
@@ -117,7 +121,8 @@ Cursor pr_double_quoted(const char *file_name, Cursor cur, CommandLineBuffer *cl
 			cur = pr_escape(file_name, cur, clb);
 			break;
 		default:
-			cur = consume_until_special_char(file_name, cur, clb);
+			cur = consume_until_special_char(file_name, cur, clb, &has_error);
+			if (has_error) return cur;
 			break;
 		}
 	}
@@ -127,6 +132,7 @@ Cursor pr_double_quoted(const char *file_name, Cursor cur, CommandLineBuffer *cl
 
 Cursor pr_token(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
 	while (*cur.ptr) {
+		int has_error = 0;
 		switch (*cur.ptr) {
 		case ' ':
 		case '\t':
@@ -149,7 +155,8 @@ Cursor pr_token(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
 			cur = pr_escape(file_name, cur, clb);
 			break;
 		default:
-			cur = consume_until_special_char(file_name, cur, clb);
+			cur = consume_until_special_char(file_name, cur, clb, &has_error);
+			if (has_error) goto end_token;
 			break;
 		}
 	}
@@ -174,7 +181,7 @@ Cursor pr_token_sep(Cursor cur, int *ended) {
 	return skip_whitespaces(cur);
 }
 
-Cursor pr_cmdline(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
+Cursor pr_cmdline(const char *file_name, Cursor cur, CommandLineBuffer *clb, uint8_t end_char) {
 	CommandLineBuffer new_clb = {
 		clb->ptr,                        // start
 		clb->ptr,                        // ptr
@@ -186,6 +193,8 @@ Cursor pr_cmdline(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
 	cur = pr_token(file_name, cur, &new_clb);
 
 	while (*cur.ptr) {
+		if (*cur.ptr == end_char) break;
+
 		int ended = 0;
 		switch (*cur.ptr) {
 		case ' ':
@@ -198,6 +207,14 @@ Cursor pr_cmdline(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
 			break;
 		}
 		if (ended) break;
+	}
+
+	if (end_char != '\0') {
+		if (*cur.ptr == end_char) cur.ptr++;
+		else {
+			fprintf(stderr, "The command line not ended with '%c': %s (%zu-%zu)\n", end_char, file_name, start_line, cur.line);
+			exit(1);
+		}
 	}
 
 	int exit_code = execute_command((const uint8_t *const *)new_clb.cmdline, new_clb.token_count);
@@ -224,7 +241,7 @@ Cursor pr_top_level(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
 		CHECK_INVALID_CHARACTER_FOUND(file_name, cur.line) // TODO: correct line.
 		return cur;
 	default:
-		return pr_cmdline(file_name, cur, clb);
+		return pr_cmdline(file_name, cur, clb, '\0');
 	}
 }
 

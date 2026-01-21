@@ -5,7 +5,7 @@ lf_or_eof = "\n" | "\0" ;
 
 letter    = "a" | ... | "z" | "A" | ... | "Z" ;
 digit     = "0" | ... | "9" ;
-special   = " " | "\t" | "\n" | "'" | "\"" | "\\" | "$" ;
+special   = " " | "\t" | "\n" | "'" | "\"" | "\\" | "$" | "(" | ")" ;
 character = ? UTF-8 character except for special ?;
 
 whitespace  = " " | "\t" ;
@@ -14,8 +14,9 @@ escaped     = "\\" , "'" | "\\" , "\"" | "\\" , "\\" ;
 comment_content = character | ? special except for "\n" ?;
 comment         = "#" , { comment_content } , lf_or_eof ;
 
-variable  = ( letter | "_" ) , { letter | digit | "_" };
-expansion = "$" , variable ;
+expansion_variable = ( letter | "_" ) , { letter | digit | "_" };
+expansion_command  = "(" , cmdline , ")" ;
+expansion          = "$" , ( variable |  command );
 
 single_quoted_content = ? UTF-8 character except for "'" ?;
 single_quoted         = "'" , { single_quote_content } , "'" ;
