@@ -256,8 +256,7 @@ Cursor pr_top_level(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
 		fprintf(stderr, "Whitespace not allowed at top level: %s (%zu)\n", file_name, cur.line);
 		exit(1);
 	case '\n':
-		cur = advance_cursor(cur, &has_error);
-		CHECK_INVALID_CHARACTER_FOUND(file_name, cur.line) // TODO: correct line.
+		cur = advance_cursor(cur, NULL);
 		return cur;
 	case '#':
 		cur = skip_line(cur, &has_error);
