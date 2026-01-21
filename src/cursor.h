@@ -16,12 +16,12 @@ static inline Cursor advance_cursor(Cursor cur, int *has_error) {
 
 	const size_t advance = get_utf8_char_length(*cur.ptr);
 	if (!advance) {
-		*has_error = 1;
+		if (has_error) *has_error = 1;
 		return (Cursor){cur.ptr + 1, cur.line};
 	}
 	for (size_t i = 0; i < advance; ++i) {
 		if (!cur.ptr[i]) {
-			*has_error = 1;
+			if (has_error) *has_error = 1;
 			return (Cursor){cur.ptr + 1, cur.line};
 		}
 	}
