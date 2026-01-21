@@ -11,7 +11,6 @@ typedef struct CommandLineBuffer_t {
 
 Cursor pr_escape(const char *file_name, Cursor cur, CommandLineBuffer *clb);
 Cursor pr_expansion_variable(const char *file_name, Cursor cur, CommandLineBuffer *clb);
-Cursor pr_expansion_command(const char *file_name, Cursor cur, CommandLineBuffer *clb);
 Cursor pr_expansion(const char *file_name, Cursor cur, CommandLineBuffer *clb);
 Cursor pr_single_quoted(const char *file_name, Cursor cur, CommandLineBuffer *clb);
 Cursor pr_double_quoted(const char *file_name, Cursor cur, CommandLineBuffer *clb);

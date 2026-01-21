@@ -9,14 +9,14 @@ special   = " " | "\t" | "\n" | "'" | "\"" | "\\" | "$" | "(" | ")" ;
 character = ? UTF-8 character except for special ?;
 
 whitespace  = " " | "\t" ;
-escaped     = "\\" , "'" | "\\" , "\"" | "\\" , "\\" ;
+escaped     = "\\" , "'" | "\\" , "\"" | "\\" , "\\" | "\\" , "$" | "\\" , "(" | "\\" , ")" ;
 
 comment_content = character | ? special except for "\n" ?;
 comment         = "#" , { comment_content } , lf_or_eof ;
 
 expansion_variable = ( letter | "_" ) , { letter | digit | "_" };
 expansion_command  = "(" , cmdline , ")" ;
-expansion          = "$" , ( variable |  command );
+expansion          = "$" , ( expansion_variable | expansion_command );
 
 single_quoted_content = ? UTF-8 character except for "'" ?;
 single_quoted         = "'" , { single_quote_content } , "'" ;

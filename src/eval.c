@@ -40,6 +40,9 @@ Cursor pr_escape(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
 	case '\'':
 	case '"':
 	case '\\':
+	case '$':
+	case '(':
+	case ')':
 		write_cmdline_buf(clb, cur.ptr, 1);
 		cur.ptr++;
 		return cur;
@@ -122,10 +125,11 @@ Cursor pr_double_quoted(const char *file_name, Cursor cur, CommandLineBuffer *cl
 			break;
 		default:
 			cur = consume_until_special_char(file_name, cur, clb, &has_error);
-			if (has_error) return cur;
+			if (has_error) goto end_double_quoted;
 			break;
 		}
 	}
+end_double_quoted:
 	fprintf(stderr, "Unclosed double quote found: %s (%zu)\n", file_name, start_line);
 	exit(1);
 }
