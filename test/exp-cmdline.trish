@@ -3,3 +3,7 @@ ECHO foo$(ECHO bar)baz
 
 ECHO $(python -c "print('foo')")
 ECHO foo$(python -c "print('bar')")baz
+
+ECHO foo"$(ECHO bar)"baz
+ECHO foo$($(ECHO python) -c $(ECHO print"('bar')"))
+  $(ECHO "baz")
