@@ -229,6 +229,7 @@ Cursor pr_cmdline(const char *file_name, Cursor cur, CommandLineBuffer *clb, uin
 		}
 	}
 
+	new_clb.cmdline[new_clb.token_count] = NULL;
 	size_t output_len = 0;
 	int exit_code = execute_command(
 		(const uint8_t *const *)new_clb.cmdline,

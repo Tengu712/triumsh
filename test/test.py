@@ -56,6 +56,7 @@ test_error("err-command-not-found.trish")
 test_error("err-command-exit-not-0.trish")
 test_error("err-invalid-escape.trish")
 test_error("err-invalid-env.trish")
+test_error("err-exp-space.trish")
 
 test_stdout("simple.trish")
 test_stdout("echo.trish")
