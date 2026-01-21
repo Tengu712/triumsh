@@ -76,7 +76,7 @@ Cursor pr_expansion(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
 	switch (*cur.ptr) {
 	case '(':
 		cur.ptr++;
-		return pr_cmdline(file_name, cur, clb, ')');
+		return pr_cmdline(file_name, cur, clb, ')', 1);
 	default:
 		return pr_expansion_variable(file_name, cur, clb);
 	}
@@ -181,7 +181,7 @@ Cursor pr_token_sep(Cursor cur, int *ended) {
 	return skip_whitespaces(cur);
 }
 
-Cursor pr_cmdline(const char *file_name, Cursor cur, CommandLineBuffer *clb, uint8_t end_char) {
+Cursor pr_cmdline(const char *file_name, Cursor cur, CommandLineBuffer *clb, uint8_t end_char, int piped) {
 	CommandLineBuffer new_clb = {
 		clb->ptr,                        // start
 		clb->ptr,                        // ptr
@@ -217,10 +217,21 @@ Cursor pr_cmdline(const char *file_name, Cursor cur, CommandLineBuffer *clb, uin
 		}
 	}
 
-	int exit_code = execute_command((const uint8_t *const *)new_clb.cmdline, new_clb.token_count);
+	size_t output_len = 0;
+	int exit_code = execute_command(
+		(const uint8_t *const *)new_clb.cmdline,
+		new_clb.token_count,
+		piped ? clb->ptr : NULL,
+		piped ? &output_len : NULL
+	);
 	if (exit_code) {
 		fprintf(stderr, "Command exited with %d: %s (%zu)\n", exit_code, file_name, start_line);
 		exit(1);
+	}
+
+	if (piped) {
+		while (output_len > 1 && clb->ptr[output_len - 1] == '\n') output_len--;
+		clb->ptr += output_len;
 	}
 	return cur;
 }
@@ -241,7 +252,7 @@ Cursor pr_top_level(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
 		CHECK_INVALID_CHARACTER_FOUND(file_name, cur.line) // TODO: correct line.
 		return cur;
 	default:
-		return pr_cmdline(file_name, cur, clb, '\0');
+		return pr_cmdline(file_name, cur, clb, '\0', 0);
 	}
 }
 

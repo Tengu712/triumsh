@@ -1,2 +1,5 @@
 ECHO $(ECHO foo)
 ECHO foo$(ECHO bar)baz
+
+ECHO $(python -c "print('foo')")
+ECHO foo$(python -c "print('bar')")baz

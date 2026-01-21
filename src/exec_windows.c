@@ -1,10 +1,10 @@
-#include "exec.h"
+#include "exec_internal.h"
 
 #include "strutil.h"
 
 #include <Windows.h>
 
-int execute_external_command(const uint8_t *const *cmdline, size_t count) {
+int execute_external_command(const uint8_t *const *cmdline, size_t count, uint8_t *output, size_t *output_len) {
 	static uint8_t cmdline_str[32768];
 
 	uint8_t *p = cmdline_str;
@@ -23,11 +23,38 @@ int execute_external_command(const uint8_t *const *cmdline, size_t count) {
 	}
 	*p = '\0';
 
+	HANDLE hReadPipe = NULL, hWritePipe = NULL;
+	if (output) {
+		SECURITY_ATTRIBUTES sa = {sizeof(SECURITY_ATTRIBUTES), NULL, TRUE};
+		if (!CreatePipe(&hReadPipe, &hWritePipe, &sa, 0)) return -1;
+		SetHandleInformation(hReadPipe, HANDLE_FLAG_INHERIT, 0);
+	}
+
 	STARTUPINFO si = {0};
 	si.cb = sizeof(si);
+	if (output) {
+		si.dwFlags = STARTF_USESTDHANDLES;
+		si.hStdOutput = hWritePipe;
+		si.hStdError = GetStdHandle(STD_ERROR_HANDLE);
+		si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+	}
 	PROCESS_INFORMATION pi;
 
-	if (!CreateProcessA(NULL, (char *)cmdline_str, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) return -1;
+	if (!CreateProcessA(NULL, (char *)cmdline_str, NULL, NULL, output ? TRUE : FALSE, 0, NULL, NULL, &si, &pi)) {
+		if (output) {
+			CloseHandle(hReadPipe);
+			CloseHandle(hWritePipe);
+		}
+		return -1;
+	}
+
+	if (output) {
+		CloseHandle(hWritePipe);
+		*output_len = 0;
+		DWORD n;
+		while (ReadFile(hReadPipe, output + *output_len, 4096, &n, NULL) && n > 0) *output_len += n;
+		CloseHandle(hReadPipe);
+	}
 
 	WaitForSingleObject(pi.hProcess, INFINITE);
 
