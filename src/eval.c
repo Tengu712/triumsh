@@ -48,6 +48,8 @@ Cursor pr_escape(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
 	case '"':
 	case '\\':
 	case '$':
+	case '{':
+	case '}':
 	case '(':
 	case ')':
 		write_cmdline_buf(clb, cur.ptr, 1);
@@ -59,36 +61,64 @@ Cursor pr_escape(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
 	}
 }
 
-Cursor pr_expansion_variable(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
-	const uint8_t *start = cur.ptr;
-	if (is_letter(*cur.ptr) || *cur.ptr == '_') cur.ptr++;
-	else {
-		fprintf(stderr, "Invalid variable name: %s (%zu)\n", file_name, cur.line);
+Cursor pr_expansion_variable(const char *file_name, Cursor cur, CommandLineBuffer *clb, int simple) {
+	const uint8_t *const start = cur.ptr;
+	const uint8_t *const clb_start = clb->ptr;
+	while (*cur.ptr) {
+		int ended = 0;
+		switch (*cur.ptr) {
+		case '\n':
+		case '\'':
+		case '"':
+		case '$':
+		case '{':
+		case '}':
+		case '(':
+		case ')':
+			ended = 1;
+			break;
+		case ' ':
+		case '\t':
+			if (simple) ended = 1;
+			else        cur = consume_whitespaces(cur, clb);
+			break;
+		case '\\':
+			cur.ptr++;
+			cur = pr_escape(file_name, cur, clb);
+			break;
+		default:
+			cur = consume_until_special_char(file_name, cur, clb);
+			break;
+		}
+		if (ended) break;
+	}
+	if (cur.ptr == start) {
+		fprintf(stderr, "Invalid variable name found: %s (%zu)\n", file_name, cur.line);
 		exit(1);
 	}
-	while (*cur.ptr && (is_letter(*cur.ptr) || is_digit(*cur.ptr) || *cur.ptr == '_')) cur.ptr++;
-
-	static char var_name[256];
-	const size_t name_len = cur.ptr - start;
-	if (name_len >= sizeof(char) * 256) {
-		fprintf(stderr, "Variable name too long: %s (%zu)\n", file_name, cur.line);
-		exit(1);
-	}
-	memcpy(var_name, start, name_len);
-	var_name[name_len] = '\0';
-
-	const char *value = getenv(var_name);
+	*clb->ptr = '\0';
+	clb->ptr = (uint8_t *)clb_start;
+	const char *const value =getenv((const char *)clb_start);
 	if (value) write_cmdline_buf(clb, (const uint8_t *)value, strlen(value));
 	return cur;
 }
 
 Cursor pr_expansion(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
 	switch (*cur.ptr) {
+	case '{':
+		cur.ptr++;
+		cur = pr_expansion_variable(file_name, cur, clb, 0);
+		if (*cur.ptr != '}') {
+			fprintf(stderr, "Unclosed '{' found: %s (%zu)\n", file_name, cur.line);
+			exit(1);
+		}
+		cur.ptr++;
+		return cur;
 	case '(':
 		cur.ptr++;
 		return pr_cmdline(file_name, cur, clb, ')', 1);
 	default:
-		return pr_expansion_variable(file_name, cur, clb);
+		return pr_expansion_variable(file_name, cur, clb, 1);
 	}
 }
 
@@ -122,6 +152,8 @@ Cursor pr_double_quoted(const char *file_name, Cursor cur, CommandLineBuffer *cl
 			break;
 		case '\n':
 		case '\'':
+		case '{':
+		case '}':
 		case '(':
 		case ')':
 			write_cmdline_buf(clb, cur.ptr, 1);
@@ -143,6 +175,8 @@ Cursor pr_token(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
 		case ' ':
 		case '\t':
 		case '\n':
+		case '{':
+		case '}':
 		case '(':
 		case ')':
 			goto end_token;
@@ -210,6 +244,8 @@ Cursor pr_cmdline(const char *file_name, Cursor cur, CommandLineBuffer *clb, uin
 			cur = advance_cursor(cur, NULL);
 			if (!is_whitespace(*cur.ptr)) ended = 1;
 			break;
+		case '{':
+		case '}':
 		case '(':
 		case ')':
 			fprintf(stderr, "Unexpected character '%c' found: %s (%zu)\n", *cur.ptr, file_name, cur.line);
