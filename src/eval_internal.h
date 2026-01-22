@@ -15,5 +15,5 @@ Cursor pr_expansion(const char *file_name, Cursor cur, CommandLineBuffer *clb);
 Cursor pr_single_quoted(const char *file_name, Cursor cur, CommandLineBuffer *clb);
 Cursor pr_double_quoted(const char *file_name, Cursor cur, CommandLineBuffer *clb);
 Cursor pr_token(const char *file_name, Cursor cur, CommandLineBuffer *clb);
-Cursor pr_cmdline(const char *file_name, Cursor cur, CommandLineBuffer *clb, uint8_t end_char, int piped);
+Cursor pr_cmdline(const char *file_name, Cursor cur, CommandLineBuffer *clb, uint8_t end_char, int piped, const uint8_t *input, size_t input_len);
 Cursor pr_top_level(const char *file_name, Cursor cur, CommandLineBuffer *clb);
