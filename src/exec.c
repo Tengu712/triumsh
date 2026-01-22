@@ -1,4 +1,3 @@
-#include "exec.h"
 #include "exec_internal.h"
 
 #include "strutil.h"
@@ -6,47 +5,37 @@
 #include <stdio.h>
 #include <string.h>
 
-void write_output(const void *src, size_t len, uint8_t **output, FILE *redirect_file) {
+void write_output(const void *src, size_t len, uint8_t **output, FILE *destination) {
 	if (*output) {
 		memcpy(*output, src, len);
 		*output += len;
 	}
-	else if (redirect_file) fwrite(src, sizeof(uint8_t), len, redirect_file);
-	else fwrite(src, sizeof(uint8_t), len, stdout);
+	else fwrite(src, sizeof(uint8_t), len, destination);
 }
 
 // Executes ECHO command.
 // Returns 0 on success, 1 on failure, 2 on skipped.
-int execute_ECHO(const uint8_t *const *cmdline, size_t count, uint8_t *output, size_t *output_len, FILE *redirect_file) {
-	if (!cmpstr_early(cmdline[0], (uint8_t *)"ECHO")) return 2;
-	uint8_t *const start = output;
-	for (size_t i = 1; i < count; ++i) {
-		size_t len = strlen((char *)cmdline[i]);
-		write_output(cmdline[i], len, &output, redirect_file);
-		if (i + 1 < count) write_output(" ", 1, &output, redirect_file);
+int execute_ECHO(ExecParams params) {
+	if (!cmpstr_early(params.cmdline[0], (uint8_t *)"ECHO")) return 2;
+	uint8_t *output = params.output;
+	for (size_t i = 1; i < params.count; ++i) {
+		size_t len = strlen((char *)params.cmdline[i]);
+		write_output(params.cmdline[i], len, &output, params.destination);
+		if (i + 1 < params.count) write_output(" ", 1, &output, params.destination);
 	}
-	write_output("\n", 1, &output, redirect_file);
-	if (output_len) *output_len = output - start;
+	write_output("\n", 1, &output, params.destination);
+	if (params.output_len) *params.output_len = output - params.output;
 	return 0;
 }
 
 #define EXECUTE(n) \
-	switch (execute_##n(cmdline, count, output, output_len, redirect_file)) { \
-	case 0: result = 0; goto cleanup; \
-	case 1: result = -1; goto cleanup; \
+	switch (execute_##n(params)) { \
+	case 0: return 0; \
+	case 1: return -1; \
 	default: break; \
 	}
 
-int execute_command(const uint8_t *const *cmdline, size_t count, uint8_t *output, size_t *output_len, const uint8_t *redirect_path) {
-	int result;
-	FILE *redirect_file = NULL;
-	if (redirect_path) {
-		redirect_file = fopen((const char *)redirect_path, "wb");
-		if (!redirect_file) return -1;
-	}
+int execute_command(ExecParams params) {
 	EXECUTE(ECHO);
-	result = execute_external_command(cmdline, count, output, output_len, redirect_path);
-cleanup:
-	if (redirect_file) fclose(redirect_file);
-	return result;
+	return execute_external_command(params);
 }

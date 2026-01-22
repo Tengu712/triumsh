@@ -2,9 +2,20 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
+
+typedef struct ExecParams_t {
+	const uint8_t *const *cmdline;
+	const size_t          count;
+	FILE *const           destination;
+
+	// If `output` is not NULL, stdout is captured into `output`
+	// and `*output_len` is set to the length.
+	// Then, `destination` is not used.
+	uint8_t *output;
+	size_t  *output_len;
+} ExecParams;
 
 // Executes a command.
 // Returns -1 on failure, otherwise returns the command's exit code.
-// If `output` is not NULL, stdout is captured into `output` and `*output_len` is set to the length.
-// If `redirect_path` is not NULL, stdout is redirected to the file.
-int execute_command(const uint8_t *const *cmdline, size_t count, uint8_t *output, size_t *output_len, const uint8_t *redirect_path);
+int execute_command(ExecParams params);

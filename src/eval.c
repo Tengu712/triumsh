@@ -280,19 +280,31 @@ Cursor pr_cmdline(const char *file_name, Cursor cur, CommandLineBuffer *clb, uin
 	}
 
 	new_clb.cmdline[new_clb.token_count] = NULL;
+
+	FILE *destination = stdout;
+	if (redirect_path) {
+		destination = fopen((const char *)redirect_path, "wb");
+		if (!destination) {
+			fprintf(stderr, "Redirect destination '%s' cannot opened: %s (%zu-%zu)\n", redirect_path, file_name, start_line, cur.line);
+			exit(1);
+		}
+	}
+
 	size_t output_len = 0;
-	int exit_code = execute_command(
-		(const uint8_t *const *)new_clb.cmdline,
-		new_clb.token_count,
-		piped ? clb->ptr : NULL,
-		piped ? &output_len : NULL,
-		redirect_path
-	);
+	ExecParams params = {
+		(const uint8_t *const *)new_clb.cmdline, // cmdline
+		new_clb.token_count,                     // count
+		destination,                             // destination
+		piped ? clb->ptr : NULL,                 // output
+		piped ? &output_len : NULL,              // output_len
+	};
+	int exit_code = execute_command(params);
 	if (exit_code) {
 		fprintf(stderr, "Command exited with %d: %s (%zu)\n", exit_code, file_name, start_line);
 		exit(1);
 	}
 
+	if (redirect_path) fclose(destination);
 	if (piped) {
 		while (output_len > 1 && (clb->ptr[output_len - 1] == '\r' || clb->ptr[output_len - 1] == '\n')) output_len--;
 		clb->ptr += output_len;
