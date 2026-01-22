@@ -88,6 +88,7 @@ test_stdout("echo.trish")
 test_stdout("escape.trish")
 test_stdout("env.trish")
 test_stdout("exp-cmdline.trish")
+test_stdout("pipe.trish")
 
 test_files("redirect.trish", {"temp.txt": "redirect.trish.txt"})
 
