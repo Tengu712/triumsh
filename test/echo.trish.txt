@@ -13,4 +13,6 @@ foo b
   ar "b
 az
 aAあ啊b
+Hello, \ world!
 Hello, > world!
+Hello, | world!

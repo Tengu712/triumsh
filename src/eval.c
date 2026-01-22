@@ -43,6 +43,7 @@ Cursor pr_escape(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
 	case '(':
 	case ')':
 	case '>':
+	case '|':
 		write_cmdline_buf(clb, cur.ptr, 1);
 		cur.ptr++;
 		return cur;
@@ -66,6 +67,7 @@ Cursor pr_expansion_variable(const char *file_name, Cursor cur, CommandLineBuffe
 		case '(':
 		case ')':
 		case '>':
+		case '|':
 			ended = 1;
 			break;
 		case ' ':
@@ -101,7 +103,7 @@ Cursor pr_expansion(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
 		return cur;
 	case '(':
 		cur.ptr++;
-		return pr_cmdline(file_name, cur, clb, ')', 1);
+		return pr_cmdline(file_name, cur, clb, ')', 1, NULL, 0);
 	default:
 		return pr_expansion_variable(file_name, cur, clb, 1);
 	}
@@ -142,6 +144,7 @@ Cursor pr_double_quoted(const char *file_name, Cursor cur, CommandLineBuffer *cl
 		case '(':
 		case ')':
 		case '>':
+		case '|':
 			write_cmdline_buf(clb, cur.ptr, 1);
 			cur = advance_cursor(cur, NULL);
 			break;
@@ -165,6 +168,7 @@ Cursor pr_token(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
 		case '(':
 		case ')':
 		case '>':
+		case '|':
 			goto end_token;
 		case '\\':
 			cur.ptr++;
@@ -196,7 +200,7 @@ end_token:
 	return cur;
 }
 
-Cursor pr_cmdline(const char *file_name, Cursor cur, CommandLineBuffer *clb, uint8_t end_char, int piped) {
+Cursor pr_cmdline(const char *file_name, Cursor cur, CommandLineBuffer *clb, uint8_t end_char, int piped, const uint8_t *input, size_t input_len) {
 	CommandLineBuffer new_clb = {
 		clb->ptr,                        // start
 		clb->ptr,                        // ptr
@@ -205,6 +209,7 @@ Cursor pr_cmdline(const char *file_name, Cursor cur, CommandLineBuffer *clb, uin
 	};
 	const size_t start_line = cur.line;
 	const uint8_t *redirect_path = NULL;
+	int has_pipe = 0;
 
 	CHECK(*cur.ptr != end_char, "The command line is empty: %s (%zu)", file_name, cur.line)
 	CHECK(
@@ -242,11 +247,47 @@ Cursor pr_cmdline(const char *file_name, Cursor cur, CommandLineBuffer *clb, uin
 			new_clb.token_count--;
 			ended = 1;
 			break;
+		case '|':
+			cur.ptr++;
+			cur = skip_whitespaces(cur);
+			CHECK(
+				*cur.ptr && *cur.ptr != '\n' && *cur.ptr != end_char,
+				"Pipe target not found: %s (%zu)\n", file_name, cur.line
+			)
+			has_pipe = 1;
+			ended = 1;
+			break;
 		default:
 			cur = pr_token(file_name, cur, &new_clb);
 			break;
 		}
 		if (ended) break;
+	}
+
+	// Execute the command line.
+	new_clb.cmdline[new_clb.token_count] = NULL;
+	uint8_t *output_buf =
+		piped
+			? clb->ptr
+			: (has_pipe || redirect_path)
+			? new_clb.ptr
+			: NULL;
+	size_t output_len = 0;
+	ExecParams params = {
+		(const uint8_t *const *)new_clb.cmdline, // cmdline
+		new_clb.token_count,                     // count
+		stdout,                                  // destination
+		output_buf,                              // output
+		output_buf ? &output_len : NULL,         // output_len
+		input,                                   // input
+		input_len,                               // input_len
+	};
+	int exit_code = execute_command(params);
+	CHECK(!exit_code, "Command exited with %d: %s (%zu)\n", exit_code, file_name, start_line)
+
+	// If pipe, continue to next command.
+	if (has_pipe) {
+		return pr_cmdline(file_name, cur, clb, end_char, piped, new_clb.ptr, output_len);
 	}
 
 	// Skip the closer.
@@ -255,28 +296,15 @@ Cursor pr_cmdline(const char *file_name, Cursor cur, CommandLineBuffer *clb, uin
 		cur.ptr++;
 	}
 
-	// Open redirect destination.
-	FILE *destination = stdout;
+	// Open redirect destination and write output.
 	if (redirect_path) {
-		destination = fopen((const char *)redirect_path, "wb");
+		FILE *destination = fopen((const char *)redirect_path, "wb");
 		CHECK(destination, "Redirect destination '%s' cannot opened: %s (%zu-%zu)\n", redirect_path, file_name, start_line, cur.line)
+		fwrite(new_clb.ptr, 1, output_len, destination);
+		fclose(destination);
 	}
 
-	// Execute the command line.
-	new_clb.cmdline[new_clb.token_count] = NULL;
-	size_t output_len = 0;
-	ExecParams params = {
-		(const uint8_t *const *)new_clb.cmdline, // cmdline
-		new_clb.token_count,                     // count
-		destination,                             // destination
-		piped ? clb->ptr : NULL,                 // output
-		piped ? &output_len : NULL,              // output_len
-	};
-	int exit_code = execute_command(params);
-	CHECK(!exit_code, "Command exited with %d: %s (%zu)\n", exit_code, file_name, start_line)
-
-	// Clean up.
-	if (redirect_path) fclose(destination);
+	// For command substitution, trim trailing newlines and advance ptr.
 	if (piped) {
 		while (output_len > 1 && (clb->ptr[output_len - 1] == '\r' || clb->ptr[output_len - 1] == '\n')) output_len--;
 		clb->ptr += output_len;
@@ -298,7 +326,7 @@ Cursor pr_top_level(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
 		CHECK_INVALID_CHARACTER_FOUND(file_name, cur.line)
 		return cur;
 	default:
-		return pr_cmdline(file_name, cur, clb, '\0', 0);
+		return pr_cmdline(file_name, cur, clb, '\0', 0, NULL, 0);
 	}
 }
 

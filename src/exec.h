@@ -14,6 +14,10 @@ typedef struct ExecParams_t {
 	// Then, `destination` is not used.
 	uint8_t *const output;
 	size_t  *const output_len;
+
+	// If `input` is not NULL, it is used as stdin.
+	const uint8_t *const input;
+	const size_t         input_len;
 } ExecParams;
 
 // Executes a command.
