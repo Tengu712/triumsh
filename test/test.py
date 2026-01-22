@@ -3,18 +3,21 @@ import subprocess
 import sys
 from pathlib import Path
 
-TRISH = Path("../build/trish")
+def p(path):
+	return os.path.join(Path(__file__).resolve().parent, path)
+
+TRISH = p("../build/trish")
 error = False
 
 def test_unit(name):
 	global error
-	if subprocess.run([name]).returncode != 0:
+	if subprocess.run([p(name)]).returncode != 0:
 		error = True
 
 def test_trish(name, expected):
 	global error
 	print(f"test: {name} ... ", end="")
-	result = subprocess.run([TRISH, name], capture_output=True, encoding="utf-8", env={**os.environ, "TEST_ENV": "hoge"})
+	result = subprocess.run([TRISH, p(name)], capture_output=True, encoding="utf-8", env={**os.environ, "TEST_ENV": "hoge"})
 	if result.returncode == 2:
 		error = True
 		print("fail (internal)")
@@ -38,7 +41,7 @@ def test_stdout(name):
 	if result:
 		global error
 		print(f"test: {name}.txt ... ", end="")
-		if result.stdout != Path(f"{name}.txt").read_text(encoding="utf-8"):
+		if result.stdout != Path(p(f"{name}.txt")).read_text(encoding="utf-8"):
 			error = True
 			print("fail")
 		else:
