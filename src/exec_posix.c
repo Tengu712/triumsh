@@ -1,6 +1,5 @@
 #include "exec_internal.h"
 
-#include <fcntl.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/wait.h>
@@ -26,10 +25,7 @@ int execute_external_command(ExecParams params) {
 			dup2(pipefd[1], STDOUT_FILENO);
 			close(pipefd[1]);
 		} else if (params.destination && params.destination != stdout) {
-			int fd = open((const char *)redirect_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-			if (fd < 0) _exit(127);
-			dup2(fd, STDOUT_FILENO);
-			close(fd);
+			dup2(fileno(params.destination), STDOUT_FILENO);
 		}
 		execvp((char *)params.cmdline[0], (char **)params.cmdline);
 		_exit(127);

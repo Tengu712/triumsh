@@ -2,6 +2,7 @@
 
 #include "strutil.h"
 
+#include <io.h>
 #include <Windows.h>
 
 int execute_external_command(ExecParams params) {
@@ -30,9 +31,9 @@ int execute_external_command(ExecParams params) {
 		if (!CreatePipe(&hReadPipe, &hWritePipe, &sa, 0)) return -1;
 		SetHandleInformation(hReadPipe, HANDLE_FLAG_INHERIT, 0);
 	} else if (params.destination && params.destination != stdout) {
-		SECURITY_ATTRIBUTES sa = {sizeof(SECURITY_ATTRIBUTES), NULL, TRUE};
-		hRedirectFile = CreateFileA((const char *)params.destination, GENERIC_WRITE, 0, &sa, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+		hRedirectFile = (HANDLE)_get_osfhandle(_fileno(params.destination));
 		if (hRedirectFile == INVALID_HANDLE_VALUE) return -1;
+		SetHandleInformation(hRedirectFile, HANDLE_FLAG_INHERIT, TRUE);
 	}
 
 	STARTUPINFO si = {0};
@@ -42,7 +43,7 @@ int execute_external_command(ExecParams params) {
 		si.hStdOutput = hWritePipe;
 		si.hStdError = GetStdHandle(STD_ERROR_HANDLE);
 		si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
-	} else if (params.destination && params.destination != stdout) {
+	} else if (hRedirectFile != INVALID_HANDLE_VALUE) {
 		si.dwFlags = STARTF_USESTDHANDLES;
 		si.hStdOutput = hRedirectFile;
 		si.hStdError = GetStdHandle(STD_ERROR_HANDLE);
@@ -50,12 +51,11 @@ int execute_external_command(ExecParams params) {
 	}
 	PROCESS_INFORMATION pi;
 
-	if (!CreateProcessA(NULL, (char *)cmdline_str, NULL, NULL, (params.output || params.destination && params.destination != stdout) ? TRUE : FALSE, 0, NULL, NULL, &si, &pi)) {
+	if (!CreateProcessA(NULL, (char *)cmdline_str, NULL, NULL, (params.output || hRedirectFile != INVALID_HANDLE_VALUE) ? TRUE : FALSE, 0, NULL, NULL, &si, &pi)) {
 		if (params.output) {
 			CloseHandle(hReadPipe);
 			CloseHandle(hWritePipe);
 		}
-		if (hRedirectFile != INVALID_HANDLE_VALUE) CloseHandle(hRedirectFile);
 		return -1;
 	}
 
@@ -68,8 +68,6 @@ int execute_external_command(ExecParams params) {
 	}
 
 	WaitForSingleObject(pi.hProcess, INFINITE);
-
-	if (hRedirectFile != INVALID_HANDLE_VALUE) CloseHandle(hRedirectFile);
 
 	DWORD exit_code;
 	GetExitCodeProcess(pi.hProcess, &exit_code);
