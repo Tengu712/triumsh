@@ -52,6 +52,7 @@ Cursor pr_escape(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
 	case '}':
 	case '(':
 	case ')':
+	case '>':
 		write_cmdline_buf(clb, cur.ptr, 1);
 		cur.ptr++;
 		return cur;
@@ -75,6 +76,7 @@ Cursor pr_expansion_variable(const char *file_name, Cursor cur, CommandLineBuffe
 		case '}':
 		case '(':
 		case ')':
+		case '>':
 			ended = 1;
 			break;
 		case ' ':
@@ -156,6 +158,7 @@ Cursor pr_double_quoted(const char *file_name, Cursor cur, CommandLineBuffer *cl
 		case '}':
 		case '(':
 		case ')':
+		case '>':
 			write_cmdline_buf(clb, cur.ptr, 1);
 			cur = advance_cursor(cur, NULL);
 			break;

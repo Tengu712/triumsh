@@ -23,3 +23,5 @@ ECHO foo 'b
 a'z
 
 ECHO a'Aあ'啊b
+
+ECHO Hell"o, > wor"ld!
