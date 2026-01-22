@@ -6,3 +6,4 @@ ECHO foo\{bar
 ECHO foo\}bar
 ECHO foo\(bar
 ECHO foo\)bar
+ECHO foo\>bar

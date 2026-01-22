@@ -3,21 +3,20 @@ import subprocess
 import sys
 from pathlib import Path
 
-def p(path):
-	return os.path.join(Path(__file__).resolve().parent, path)
+os.chdir(Path(__file__).resolve().parent)
 
-TRISH = p("../build/trish")
+TRISH = "../build/trish"
 error = False
 
 def test_unit(name):
 	global error
-	if subprocess.run([p(name)]).returncode != 0:
+	if subprocess.run([name]).returncode != 0:
 		error = True
 
 def test_trish(name, expected):
 	global error
 	print(f"test: {name} ... ", end="")
-	result = subprocess.run([TRISH, p(name)], capture_output=True, encoding="utf-8", env={**os.environ, "TEST_ENV": "hoge"})
+	result = subprocess.run([TRISH, name], capture_output=True, encoding="utf-8", env={**os.environ, "TEST_ENV": "hoge"})
 	if result.returncode == 2:
 		error = True
 		print("fail (internal)")
@@ -41,11 +40,32 @@ def test_stdout(name):
 	if result:
 		global error
 		print(f"test: {name}.txt ... ", end="")
-		if result.stdout != Path(p(f"{name}.txt")).read_text(encoding="utf-8"):
+		if result.stdout != Path(f"{name}.txt").read_text(encoding="utf-8"):
 			error = True
 			print("fail")
 		else:
 			print("ok")
+
+def test_files(name, files):
+	result = test_trish(name, 0)
+	if result:
+		global error
+		for output_file, expected_file in files.items():
+			print(f"test: {expected_file} ... ", end="")
+			output_path = Path(output_file)
+			expected_path = Path(expected_file)
+			try:
+				if output_path.read_bytes() != expected_path.read_bytes():
+					error = True
+					print("fail")
+				else:
+					print("ok")
+			except FileNotFoundError:
+				error = True
+				print("fail (file not found)")
+			finally:
+				if output_path.exists():
+					output_path.unlink()
 
 test_unit("../build/test_cursor")
 
@@ -61,12 +81,15 @@ test_error("err-command-exit-not-0.trish")
 test_error("err-invalid-escape.trish")
 test_error("err-invalid-env.trish")
 test_error("err-exp-space.trish")
+test_error("err-no-redirect-target.trish")
 
 test_stdout("simple.trish")
 test_stdout("echo.trish")
 test_stdout("escape.trish")
 test_stdout("env.trish")
 test_stdout("exp-cmdline.trish")
+
+test_files("redirect.trish", {"temp.txt": "redirect.trish.txt"})
 
 if error:
 	print("some tests failed.")

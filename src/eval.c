@@ -52,6 +52,7 @@ Cursor pr_escape(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
 	case '}':
 	case '(':
 	case ')':
+	case '>':
 		write_cmdline_buf(clb, cur.ptr, 1);
 		cur.ptr++;
 		return cur;
@@ -75,6 +76,7 @@ Cursor pr_expansion_variable(const char *file_name, Cursor cur, CommandLineBuffe
 		case '}':
 		case '(':
 		case ')':
+		case '>':
 			ended = 1;
 			break;
 		case ' ':
@@ -156,6 +158,7 @@ Cursor pr_double_quoted(const char *file_name, Cursor cur, CommandLineBuffer *cl
 		case '}':
 		case '(':
 		case ')':
+		case '>':
 			write_cmdline_buf(clb, cur.ptr, 1);
 			cur = advance_cursor(cur, NULL);
 			break;
@@ -179,6 +182,7 @@ Cursor pr_token(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
 		case '}':
 		case '(':
 		case ')':
+		case '>':
 			goto end_token;
 		case '\\':
 			cur.ptr++;
@@ -221,6 +225,7 @@ Cursor pr_cmdline(const char *file_name, Cursor cur, CommandLineBuffer *clb, uin
 		0,                               // token_count
 	};
 	const size_t start_line = cur.line;
+	const uint8_t *redirect_path = NULL;
 
 	if (*cur.ptr == end_char) {
 		fprintf(stderr, "The command line is empty: %s (%zu)", file_name, cur.line);
@@ -250,6 +255,18 @@ Cursor pr_cmdline(const char *file_name, Cursor cur, CommandLineBuffer *clb, uin
 		case ')':
 			fprintf(stderr, "Unexpected character '%c' found: %s (%zu)\n", *cur.ptr, file_name, cur.line);
 			exit(1);
+		case '>':
+			cur.ptr++;
+			cur = skip_whitespaces(cur);
+			if (!*cur.ptr || *cur.ptr == '\n' || *cur.ptr == end_char) {
+				fprintf(stderr, "Redirect target not found: %s (%zu)\n", file_name, cur.line);
+				exit(1);
+			}
+			redirect_path = new_clb.ptr;
+			cur = pr_token(file_name, cur, &new_clb);
+			new_clb.token_count--;
+			ended = 1;
+			break;
 		default:
 			cur = pr_token(file_name, cur, &new_clb);
 			break;
@@ -266,18 +283,31 @@ Cursor pr_cmdline(const char *file_name, Cursor cur, CommandLineBuffer *clb, uin
 	}
 
 	new_clb.cmdline[new_clb.token_count] = NULL;
+
+	FILE *destination = stdout;
+	if (redirect_path) {
+		destination = fopen((const char *)redirect_path, "wb");
+		if (!destination) {
+			fprintf(stderr, "Redirect destination '%s' cannot opened: %s (%zu-%zu)\n", redirect_path, file_name, start_line, cur.line);
+			exit(1);
+		}
+	}
+
 	size_t output_len = 0;
-	int exit_code = execute_command(
-		(const uint8_t *const *)new_clb.cmdline,
-		new_clb.token_count,
-		piped ? clb->ptr : NULL,
-		piped ? &output_len : NULL
-	);
+	ExecParams params = {
+		(const uint8_t *const *)new_clb.cmdline, // cmdline
+		new_clb.token_count,                     // count
+		destination,                             // destination
+		piped ? clb->ptr : NULL,                 // output
+		piped ? &output_len : NULL,              // output_len
+	};
+	int exit_code = execute_command(params);
 	if (exit_code) {
 		fprintf(stderr, "Command exited with %d: %s (%zu)\n", exit_code, file_name, start_line);
 		exit(1);
 	}
 
+	if (redirect_path) fclose(destination);
 	if (piped) {
 		while (output_len > 1 && (clb->ptr[output_len - 1] == '\r' || clb->ptr[output_len - 1] == '\n')) output_len--;
 		clb->ptr += output_len;
