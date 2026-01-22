@@ -6,12 +6,6 @@
 #include <unistd.h>
 
 int execute_external_command(ExecParams params) {
-	// VALIDATION:
-	if (params.cmdline[params.count] != NULL) {
-		fprintf(stderr, "Internal error: cmdline array not NULL terminated\n");
-		exit(2);
-	}
-
 	int pipefd[2];
 	if (params.output && pipe(pipefd) < 0) return -1;
 
