@@ -1,3 +1,4 @@
+#include "error.h"
 #include "eval.h"
 
 #include <limits.h>
@@ -35,24 +36,13 @@ int main(int argc, const char *const argv[]) {
 	}
 
 	FILE *const fp = fopen(argv[1], "rb");
-	if (!fp) {
-		fprintf(stderr, "No such file: %s\n", argv[1]);
-		return 1;
-	}
+	CHECK(fp, "No such file: %s\n", argv[1])
 
 	const size_t file_size = get_file_size(fp);
-	if (file_size == LONG_MAX) {
-		fprintf(stderr, "Failed to seek in '%s'\n", argv[1]);
-		fclose(fp);
-		return 1;
-	}
+	CHECK(file_size != LONG_MAX, "Failed to seek in '%s'\n", argv[1])
 
 	uint8_t *const data = read_file(fp, file_size);
-	if (!data) {
-		fprintf(stderr, "Failed to read '%s'\n", argv[1]);
-		fclose(fp);
-		return 1;
-	}
+	CHECK(data, "Failed to read '%s'\n", argv[1])
 
 	fclose(fp);
 
