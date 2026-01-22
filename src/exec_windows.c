@@ -8,6 +8,7 @@
 int execute_external_command(ExecParams params) {
 	static uint8_t cmdline_str[32768];
 
+	// Build command line.
 	uint8_t *p = cmdline_str;
 	for (size_t i = 0; i < params.count; ++i) {
 		int has_space = 0;
@@ -24,54 +25,60 @@ int execute_external_command(ExecParams params) {
 	}
 	*p = '\0';
 
-	HANDLE hReadPipe = NULL, hWritePipe = NULL;
-	HANDLE hRedirectFile = INVALID_HANDLE_VALUE;
+	// Define variables.
+	BOOL inherit_needed = FALSE;
+	STARTUPINFO      si = {0};
+	si.cb = sizeof(STARTUPINFO);
+
+	// Create pipes to capture the output.
+	HANDLE read_pipe  = NULL;
+	HANDLE write_pipe = NULL;
 	if (params.output) {
 		SECURITY_ATTRIBUTES sa = {sizeof(SECURITY_ATTRIBUTES), NULL, TRUE};
-		if (!CreatePipe(&hReadPipe, &hWritePipe, &sa, 0)) return -1;
-		SetHandleInformation(hReadPipe, HANDLE_FLAG_INHERIT, 0);
-	} else if (params.destination && params.destination != stdout) {
-		hRedirectFile = (HANDLE)_get_osfhandle(_fileno(params.destination));
-		if (hRedirectFile == INVALID_HANDLE_VALUE) return -1;
-		SetHandleInformation(hRedirectFile, HANDLE_FLAG_INHERIT, TRUE);
+		if (!CreatePipe(&read_pipe, &write_pipe, &sa, 0)) return -1;
+		SetHandleInformation(read_pipe, HANDLE_FLAG_INHERIT, 0);
+		inherit_needed = TRUE;
+		si.hStdOutput = write_pipe;
 	}
 
-	STARTUPINFO si = {0};
-	si.cb = sizeof(si);
-	if (params.output) {
+	// Create a handle to redirect the output to a file.
+	HANDLE redirect_file = INVALID_HANDLE_VALUE;
+	if (params.destination && params.destination != stdout) {
+		redirect_file = (HANDLE)_get_osfhandle(_fileno(params.destination));
+		if (redirect_file == INVALID_HANDLE_VALUE) return -1;
+		SetHandleInformation(redirect_file, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
+		inherit_needed = TRUE;
+		si.hStdOutput = redirect_file;
+	}
+
+	// Set up.
+	if (si.hStdOutput != NULL) {
 		si.dwFlags = STARTF_USESTDHANDLES;
-		si.hStdOutput = hWritePipe;
-		si.hStdError = GetStdHandle(STD_ERROR_HANDLE);
-		si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
-	} else if (hRedirectFile != INVALID_HANDLE_VALUE) {
-		si.dwFlags = STARTF_USESTDHANDLES;
-		si.hStdOutput = hRedirectFile;
 		si.hStdError = GetStdHandle(STD_ERROR_HANDLE);
 		si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
 	}
+
+	// Execute.
 	PROCESS_INFORMATION pi;
-
-	if (!CreateProcessA(NULL, (char *)cmdline_str, NULL, NULL, (params.output || hRedirectFile != INVALID_HANDLE_VALUE) ? TRUE : FALSE, 0, NULL, NULL, &si, &pi)) {
-		if (params.output) {
-			CloseHandle(hReadPipe);
-			CloseHandle(hWritePipe);
-		}
+	if (!CreateProcessA(NULL, (char *)cmdline_str, NULL, NULL, inherit_needed, 0, NULL, NULL, &si, &pi)) {
+		if (read_pipe)  CloseHandle(read_pipe);
+		if (write_pipe) CloseHandle(write_pipe);
 		return -1;
 	}
 
+	// Read the output.
 	if (params.output) {
-		CloseHandle(hWritePipe);
+		CloseHandle(write_pipe);
 		*params.output_len = 0;
 		DWORD n;
-		while (ReadFile(hReadPipe, params.output + *params.output_len, 4096, &n, NULL) && n > 0) *params.output_len += n;
-		CloseHandle(hReadPipe);
+		while (ReadFile(read_pipe, params.output + *params.output_len, 4096, &n, NULL) && n > 0) *params.output_len += n;
+		CloseHandle(read_pipe);
 	}
 
+	// Wait & exit.
 	WaitForSingleObject(pi.hProcess, INFINITE);
-
 	DWORD exit_code;
 	GetExitCodeProcess(pi.hProcess, &exit_code);
-
 	CloseHandle(pi.hProcess);
 	CloseHandle(pi.hThread);
 	return exit_code;
