@@ -47,6 +47,27 @@ def test_stdout(name):
 		else:
 			print("ok")
 
+def test_files(name, files):
+	result = test_trish(name, 0)
+	if result:
+		global error
+		for output_file, expected_file in files.items():
+			print(f"test: {expected_file} ... ", end="")
+			output_path = Path(p(output_file))
+			expected_path = Path(p(expected_file))
+			try:
+				if output_path.read_bytes() != expected_path.read_bytes():
+					error = True
+					print("fail")
+				else:
+					print("ok")
+			except FileNotFoundError:
+				error = True
+				print("fail (file not found)")
+			finally:
+				if output_path.exists():
+					output_path.unlink()
+
 test_unit("../build/test_cursor")
 
 test_success("empty.trish")
@@ -67,6 +88,8 @@ test_stdout("echo.trish")
 test_stdout("escape.trish")
 test_stdout("env.trish")
 test_stdout("exp-cmdline.trish")
+
+test_files("redirect.trish", {"temp.txt": "redirect.trish.txt"})
 
 if error:
 	print("some tests failed.")
