@@ -1,11 +1,12 @@
 #include "exec_internal.h"
 
+#include <fcntl.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
-int execute_external_command(const uint8_t *const *cmdline, size_t count, uint8_t *output, size_t *output_len) {
+int execute_external_command(const uint8_t *const *cmdline, size_t count, uint8_t *output, size_t *output_len, const uint8_t *redirect_path) {
 	// VALIDATION:
 	if (cmdline[count] != NULL) {
 		fprintf(stderr, "Internal error: cmdline array not NULL terminated\n");
@@ -24,6 +25,11 @@ int execute_external_command(const uint8_t *const *cmdline, size_t count, uint8_
 			close(pipefd[0]);
 			dup2(pipefd[1], STDOUT_FILENO);
 			close(pipefd[1]);
+		} else if (redirect_path) {
+			int fd = open((const char *)redirect_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+			if (fd < 0) _exit(127);
+			dup2(fd, STDOUT_FILENO);
+			close(fd);
 		}
 		execvp((char *)cmdline[0], (char **)cmdline);
 		_exit(127);

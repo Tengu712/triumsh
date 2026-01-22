@@ -179,6 +179,7 @@ Cursor pr_token(const char *file_name, Cursor cur, CommandLineBuffer *clb) {
 		case '}':
 		case '(':
 		case ')':
+		case '>':
 			goto end_token;
 		case '\\':
 			cur.ptr++;
@@ -221,6 +222,7 @@ Cursor pr_cmdline(const char *file_name, Cursor cur, CommandLineBuffer *clb, uin
 		0,                               // token_count
 	};
 	const size_t start_line = cur.line;
+	const uint8_t *redirect_path = NULL;
 
 	if (*cur.ptr == end_char) {
 		fprintf(stderr, "The command line is empty: %s (%zu)", file_name, cur.line);
@@ -250,6 +252,18 @@ Cursor pr_cmdline(const char *file_name, Cursor cur, CommandLineBuffer *clb, uin
 		case ')':
 			fprintf(stderr, "Unexpected character '%c' found: %s (%zu)\n", *cur.ptr, file_name, cur.line);
 			exit(1);
+		case '>':
+			cur.ptr++;
+			cur = skip_whitespaces(cur);
+			if (!*cur.ptr || *cur.ptr == '\n' || *cur.ptr == end_char) {
+				fprintf(stderr, "Redirect target not found: %s (%zu)\n", file_name, cur.line);
+				exit(1);
+			}
+			redirect_path = new_clb.ptr;
+			cur = pr_token(file_name, cur, &new_clb);
+			new_clb.token_count--;
+			ended = 1;
+			break;
 		default:
 			cur = pr_token(file_name, cur, &new_clb);
 			break;
@@ -271,7 +285,8 @@ Cursor pr_cmdline(const char *file_name, Cursor cur, CommandLineBuffer *clb, uin
 		(const uint8_t *const *)new_clb.cmdline,
 		new_clb.token_count,
 		piped ? clb->ptr : NULL,
-		piped ? &output_len : NULL
+		piped ? &output_len : NULL,
+		redirect_path
 	);
 	if (exit_code) {
 		fprintf(stderr, "Command exited with %d: %s (%zu)\n", exit_code, file_name, start_line);
